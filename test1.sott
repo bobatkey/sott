@@ -1,0 +1,42 @@
+define transport :
+  (A : Set)(x : A)(P : A -> Set)(p : P x)(y : A) -> [x : A = y : A] -> P y
+as \A -> \x -> \P -> \p -> \y -> \e ->
+     coerce(p, P x, P y, subst(A, x. P x, x, y, e))
+
+define and :
+  Bool -> Bool -> Bool
+as \x -> \y -> x case for y. Bool { True -> y; False -> False }
+
+(* An easier to use functional extensionality principle *)
+define funext2 :
+  (S : Set)(T : S -> Set)(f : (x : S) -> T x)(g : (x : S) -> T x) ->
+  ((x : S) -> [f x : T x = g x : T x]) ->
+  [f : (x : S) -> T x = g : (x : S) -> T x]
+as \S -> \T -> \f -> \g -> \e ->
+   funext (x1 x2 xe. coerce(e x1,
+                            [f x1 : T x1 = g x1 : T x1],
+                            [f x1 : T x1 = g x2 : T x2],
+                            subst(S,y.[f x1 : T x1 = g y : T y],x1,x2,xe)))
+
+define eq_funcs :
+  [ \b -> and b False : Bool -> Bool = \b -> False : Bool -> Bool]
+as
+  funext2 Bool (\x -> Bool) (\b -> and b False) (\b -> False)
+    (\b -> b case for b. [and b False : Bool = False : Bool ]
+                { True -> refl; False -> refl })
+
+define F : (Bool -> Bool) -> Set as \f -> Bool
+
+define hofmann : Bool
+as (*coerce(True, F (\b -> and b False), F (\b -> False),
+          subst(Bool -> Bool, x. F x, (\b -> and b False), (\b -> False), eq_funcs))*)
+   transport (Bool -> Bool)
+             (\b -> and b False)
+             F
+             True
+             (\b -> False)
+             eq_funcs
+
+define test :
+  [hofmann : Bool = True : Bool]
+as refl

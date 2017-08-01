@@ -1,0 +1,13 @@
+(jbuild_version 1)
+
+(executable
+ ((name sott_check)))
+
+(library
+ ((name sott)))
+
+(menhir
+ ((modules (parser))))
+
+(ocamllex
+ (lexer))
