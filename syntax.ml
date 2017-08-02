@@ -403,6 +403,27 @@ end
 
 (******************************************************************************)
 (* Evaluation: injection into the semantic 'value' domain. *)
+let rec coerce v src tgt = match v, src, tgt with
+  | v, V_Bool, V_Bool -> v
+  | v, V_Set,  V_Set  -> v
+  | f, V_Pi (ty_s,ty_t), V_Pi (ty_s',ty_t') ->
+     V_Lam
+       (fun s' ->
+          let s = coerce s' ty_s' ty_s in
+          let t = apply f s in
+          coerce t (ty_t' s') (ty_t s))
+  | p, V_Sigma (ty_s,ty_t), V_Sigma (ty_s', ty_t') ->
+     let s' = coerce (vfst p) ty_s ty_s' in
+     V_Pair (s', coerce (vsnd p) (ty_t (vfst p)) (ty_t' s'))
+  | _, V_TyEq _, V_TyEq _ (* FIXME: these two cases could go straight to irrel? *)
+  | _, V_TmEq _, V_TmEq _
+  | _, V_Neu _, _
+  | _, _, V_Neu _ ->
+     V_Neu (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
+  | _ ->
+     (* FIXME: ought to be a suspended falsity elimination *)
+     V_Neu (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
+
 let evaluate ctxt tm =
   let rec eval tm env = match tm with
     | Neutral (h, es) -> eval_elims (eval_head h env) es env
@@ -433,10 +454,7 @@ let evaluate ctxt tm =
          | typ, Some defn ->
             defn)
     | Coerce { coercee; src_type; tgt_type } ->
-       V_Neu (H_Coe { coercee  = eval coercee env
-                    ; src_type = eval src_type env
-                    ; tgt_type = eval tgt_type env
-                    }, E_Nil)
+       coerce (eval coercee env) (eval src_type env) (eval tgt_type env)
   and eval_elims scrutinee elims env = match elims with
     | Nil ->
        scrutinee

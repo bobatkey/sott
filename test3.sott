@@ -24,15 +24,23 @@ as \S -> \T -> \f -> \g -> \e ->
                             subst(S,y.[f x1 : T x1 = g y : T y],x1,x2,xe)))
 
 define eq_funcs :
-  [ \b -> and b False : Bool -> Bool = \b -> False : Bool -> Bool]
+  [ \b -> False : Bool -> Bool = \b -> and b False : Bool -> Bool]
 as
-  funext2 Bool (\x -> Bool) (\b -> and b False) (\b -> False)
-    (\b -> b by_cases for b. [and b False : Bool = False : Bool ]
+  funext2 Bool (\x -> Bool) (\b -> False) (\b -> and b False) 
+    (\b -> b by_cases for b. [False : Bool = and b False : Bool ]
                 { True -> refl; False -> refl })
-(*
-FIXME: this doesn't work because the equality types do not live inside the universe...
 
 define F : (Bool -> Bool) -> Set
 as \f -> sum [f : Bool -> Bool = \x -> False : Bool -> Bool] [f : Bool -> Bool = \x -> True : Bool -> Bool]
 
+define v : F (\x -> False)
+as (True, refl)
+
+define hofmann2 : F (\x -> and x False)
+as coerce(v, F (\x -> False), F (\x -> and x False),
+          subst(Bool -> Bool,x. F x, (\x -> False), (\x -> and x False), eq_funcs))
+
+(*
+define test :
+  [hofmann : F (\x -> and x False) = (true, coerce
 *)
