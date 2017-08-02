@@ -189,7 +189,7 @@ type value =
   | V_False
   | V_Pi      of value * (value -> value)
   | V_TyEq    of value * value
-  | V_TmEq    of value * value * value * value
+  | V_TmEq    of { s : value; s_ty : value; t : value; t_ty : value }
   | V_Irrel
 
 and v_elims =
@@ -235,7 +235,7 @@ let rec reify_type v i = match v with
   | V_Set         -> Set
   | V_Bool        -> Bool
   | V_TyEq (s, t) -> TyEq (reify_type s i, reify_type t i)
-  | V_TmEq (s, s_ty, t, t_ty) ->
+  | V_TmEq {s; s_ty; t; t_ty} ->
      TmEq { tm1 = reify s_ty s i
           ; ty1 = reify_type s_ty i
           ; tm2 = reify t_ty t i
@@ -358,7 +358,11 @@ let evaluate ctxt tm =
     | Pi (t1, t2)     -> V_Pi (eval t1 env, fun v -> eval t2 (v::env))
     | TyEq (s, t)     -> V_TyEq (eval s env, eval t env)
     | TmEq {tm1;ty1;tm2;ty2} ->
-       V_TmEq (eval tm1 env, eval ty1 env, eval tm2 env, eval ty2 env)
+       V_TmEq { s    = eval tm1 env
+              ; s_ty = eval ty1 env
+              ; t    = eval tm2 env
+              ; t_ty = eval ty2 env
+              }
     | Bool  -> V_Bool
     | True  -> V_True
     | False -> V_False
@@ -472,9 +476,10 @@ and has_type ctxt ty tm = match ty, tm with
                    | Ok (), Ok () ->
                       let tm_x = eval_closed ctxt tm_x in
                       let tm_y = eval_closed ctxt tm_y in
-                      (match
-                         has_type ctxt (V_TmEq (tm_x, ty_s, tm_y, ty_s)) tm_e
-                       with
+                      let ty   =
+                        V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s }
+                      in
+                      (match has_type ctxt ty tm_e with
                          | Ok () ->
                             if (equal_types (ty_t tm_x) ty1
                                 && equal_types (ty_t tm_y) ty2)
@@ -497,33 +502,38 @@ and has_type ctxt ty tm = match ty, tm with
      else
        Error (`Msg "types not equal in refl")
 
-  | V_TmEq (tm1, ty1, tm2, ty2), Refl ->
-     if equal_types ty1 ty2 then
-       (if equal_terms tm1 tm2 ty1 then
+  | V_TmEq { s; s_ty; t; t_ty }, Refl ->
+     if equal_types s_ty t_ty then
+       (if equal_terms s t s_ty then
           Ok ()
         else
           Error (`Msg "terms not equal in refl"))
      else
        Error (`Msg "types not equal in refl")
 
-  | V_TmEq (tm_f1, V_Pi (s1, t1), tm_f2, V_Pi (s2, t2)), Funext proof ->
+  | V_TmEq {s=tm_f1; s_ty=V_Pi (s1, t1); t=tm_f2; t_ty=V_Pi (s2, t2)},
+    Funext proof ->
      let x1, ctxt = Context.extend ctxt s1 in
      let x1v      = free x1 s1 in
      let x2, ctxt = Context.extend ctxt s2 in
      let x2v      = free x2 s2 in
-     let xe, ctxt = Context.extend ctxt (V_TmEq (x1v, s2, x2v, s2)) in
+     let xe, ctxt =
+       Context.extend ctxt (V_TmEq {s=x1v; s_ty=s2; t=x2v; t_ty=s2}) in
      let proof    = close xe 0 (close x2 1 (close x1 2 proof)) in
      let reqd_ty  =
-       V_TmEq (apply tm_f1 x1v, t1 x1v,
-               apply tm_f2 x2v, t2 x2v)
+       V_TmEq { s    = apply tm_f1 x1v
+              ; s_ty = t1 x1v
+              ; t    = apply tm_f2 x2v
+              ; t_ty = t2 x2v
+              }
      in
      has_type ctxt reqd_ty proof
 
-  | V_TmEq (tm_a, ty_a, tm_b, ty_b), Coh ->
-     let tm_b' =
-       V_Neu (H_Coe { coercee = tm_a; src_type = ty_a; tgt_type = ty_b }, E_Nil)
+  | V_TmEq {s; s_ty; t; t_ty}, Coh ->
+     let t' =
+       V_Neu (H_Coe { coercee = s; src_type = s_ty; tgt_type = t_ty }, E_Nil)
      in
-     if equal_terms tm_b tm_b' ty_b then
+     if equal_terms t t' t_ty then
        Ok ()
      else
        Error (`Msg "invalid coh")
