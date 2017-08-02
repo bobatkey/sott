@@ -4,6 +4,8 @@ type term =
   | Lam of term
   | Set
   | Pi  of term * term
+  | Sigma of term * term
+  | Pair of term * term
   | Bool
   | True
   | False
@@ -39,6 +41,7 @@ and elims =
   | Nil
   | App of elims * term
   | If  of elims * term * term * term
+  | Project of elims * [`fst | `snd]
 
 val bind : string -> ?offset:int -> term -> term
 

@@ -22,7 +22,9 @@ type term =
 
   | Lam of term
   | Set
-  | Pi  of term * term
+  | Pi of term * term
+  | Sigma of term * term
+  | Pair of term * term
   | Bool
   | True
   | False
@@ -68,6 +70,7 @@ and elims =
   | Nil
   | App of elims * term
   | If  of elims * term * term * term
+  | Project of elims * [`fst | `snd]
 
 let bind x ?(offset=0) term =
   let rec bind_term x j = function
@@ -79,6 +82,10 @@ let bind x ?(offset=0) term =
        Set
     | Pi (s, t) ->
        Pi (bind_term x j s, bind_term x (j+1) t)
+    | Sigma (s, t) ->
+       Sigma (bind_term x j s, bind_term x (j+1) t)
+    | Pair (t1, t2) ->
+       Pair (bind_term x j t1, bind_term x j t2)
     | TyEq (s, t) ->
        TyEq (bind_term x j s, bind_term x j t)
     | TmEq {tm1;ty1;tm2;ty2} ->
@@ -121,6 +128,8 @@ let bind x ?(offset=0) term =
            bind_term x (j+1) ty,
            bind_term x j tm_t,
            bind_term x j tm_f)
+    | Project (elims, component) ->
+       Project (bind_elims x j elims, component)
   in
   bind_term x offset term
 
@@ -130,6 +139,8 @@ let rec close x j = function
   | Lam t -> Lam (close x (j+1) t)
   | Set -> Set
   | Pi (s, t) -> Pi (close x j s, close x (j+1) t)
+  | Sigma (s, t) -> Sigma (close x j s, close x (j+1) t)
+  | Pair (s, t) -> Pair (close x j s, close x j t)
   | TyEq (s, t) -> TyEq (close x j s, close x j t)
   | TmEq {tm1;ty1;tm2;ty2} ->
      TmEq { tm1 = close x j tm1
@@ -176,6 +187,8 @@ and close_elims x j = function
          close x (j+1) ty,
          close x j tm_t,
          close x j tm_f)
+  | Project (elims, component) ->
+     Project (close_elims x j elims, component)
 
 (******************************************************************************)
 type shift = int
@@ -188,6 +201,8 @@ type value =
   | V_True
   | V_False
   | V_Pi      of value * (value -> value)
+  | V_Sigma   of value * (value -> value)
+  | V_Pair    of value * value
   | V_TyEq    of value * value
   | V_TmEq    of { s : value; s_ty : value; t : value; t_ty : value }
   | V_Irrel
@@ -196,6 +211,7 @@ and v_elims =
   | E_Nil
   | E_App of v_elims * value
   | E_If  of v_elims * (value -> value) * value * value
+  | E_Project of v_elims * [`fst|`snd]
 
 and v_head =
   | H_Var     of { shift : shift; typ : value }
@@ -214,11 +230,18 @@ let rec eval_elims t = function
   | E_Nil -> t
   | E_App (es, v) -> apply (eval_elims t es) v
   | E_If (es, ty, v_t, v_f) ->
-     match eval_elims t es with
+     (match eval_elims t es with
        | V_True        -> v_t
        | V_False       -> v_f
        | V_Neu (h, es) -> V_Neu (h, E_If (es, ty, v_t, v_f))
-       | _ -> failwith "type error"
+       | _ -> failwith "type error")
+  | E_Project (es, component) ->
+     (match eval_elims t es, component with
+       | V_Pair (v, _), `fst -> v
+       | V_Pair (_, v), `snd -> v
+       | V_Neu (h, es), _    -> V_Neu (h, E_Project (es, component))
+       | _  -> failwith "internal error: type error in projection")
+       
 
 let var ty i =
   V_Neu (H_Var { shift = i; typ = ty }, E_Nil)
@@ -226,12 +249,25 @@ let var ty i =
 let free x ty =
   V_Neu (H_Free { name = x; typ = ty }, E_Nil)
 
+let vfst = function
+  | V_Pair (v, _) -> v
+  | V_Neu (h, es) -> V_Neu (h, E_Project (es, `fst))
+  | _             -> failwith "internal error: type error in vfst"
+
+let vsnd = function
+  | V_Pair (_, v) -> v
+  | V_Neu (h, es) -> V_Neu (h, E_Project (es, `snd))
+  | _             -> failwith "internal error: type error in vsnd"
+
 (**********************************************************************)
 (* FIXME: equality test rather than reify to term and check for equal?
    *)
 
 let rec reify_type v i = match v with
-  | V_Pi (s, t)   -> Pi (reify_type s i, reify_type (t (var s i)) (i+1))
+  | V_Pi (s, t) ->
+     Pi (reify_type s i, reify_type (t (var s i)) (i+1))
+  | V_Sigma (s, t) ->
+     Sigma (reify_type s i, reify_type (t (var s i)) (i+1))
   | V_Set         -> Set
   | V_Bool        -> Bool
   | V_TyEq (s, t) -> TyEq (reify_type s i, reify_type t i)
@@ -246,6 +282,8 @@ let rec reify_type v i = match v with
 
 and reify ty v i = match ty, v with
   | V_Pi (s, t), f -> let v = var s i in Lam (reify (t v) (apply f v) (i+1))
+  | V_Sigma (s, t), p ->
+     Pair (reify s (vfst p) i, reify (t (vfst p)) (vsnd p) i)
   | V_TyEq _, v       -> Irrel
   | V_TmEq _, v       -> Irrel
   | V_Bool,   V_True  -> True
@@ -256,36 +294,51 @@ and reify ty v i = match ty, v with
 
 and reify_neutral h es i = match h with
   | H_Var { shift; typ } ->
-     Neutral (Bound (i-shift-1), reify_elims typ es i)
+     let es, _ = reify_elims h typ es i in
+     Neutral (Bound (i-shift-1), es)
   | H_Free { name; typ } ->
-     Neutral (Free name, reify_elims typ es i)
+     let es, _ = reify_elims h typ es i in
+     Neutral (Free name, es)
   | H_Coe { coercee; src_type; tgt_type } ->
      let ty1_tm = reify_type src_type i in
      let ty2_tm = reify_type tgt_type i in
      if ty1_tm = ty2_tm then
        reify src_type (eval_elims coercee es) i
      else
-       let h =
-         Coerce { coercee  = reify src_type coercee i
-                ; src_type = ty1_tm
-                ; tgt_type = ty2_tm
-                ; eq_proof = Irrel
-                }
-       in
-       Neutral (h, reify_elims tgt_type es i)
+       let es, _ = reify_elims h tgt_type es i in
+       Neutral (Coerce { coercee  = reify src_type coercee i
+                       ; src_type = ty1_tm
+                       ; tgt_type = ty2_tm
+                       ; eq_proof = Irrel
+                       }, es)
 
-and reify_elims ty es i = match ty, es with
-  | _, E_Nil ->
-     Nil
-  | V_Pi (s, t), E_App (es, v) ->
-     App (reify_elims (t v) es i, reify s v i)
-  | _, E_App _ ->
-     failwith "internal error: type error reifying application"
-  | _, E_If (es, ty, v_t, v_f) ->
-     If (reify_elims V_Bool es i,
-         reify_type (ty (var V_Bool i)) (i+1),
-         reify (ty V_True) v_t i,
-         reify (ty V_False) v_f i)
+and reify_elims h ty es i = match es with
+  | E_Nil ->
+     Nil, ty
+  | E_App (es, v) ->
+     (match reify_elims h ty es i with
+       | es, V_Pi (s, t) ->
+          App (es, reify s v i), t v
+       | _ ->
+          failwith "internal error: type error reifying application")
+  | E_If (es, elim_ty, v_t, v_f) ->
+     (match reify_elims h ty es i with
+       | es', V_Bool ->
+          If (es',
+              reify_type (elim_ty (var V_Bool i)) (i+1),
+              reify (elim_ty V_True) v_t i,
+              reify (elim_ty V_False) v_f i),
+          elim_ty (V_Neu (h, es))
+       | _ ->
+          failwith "internal error: type error reifying bool case switch")
+  | E_Project (es, component) ->
+     (match reify_elims h ty es i, component with
+       | (reified_es, V_Sigma (s, t)), `fst ->
+          Project (reified_es, `fst), s
+       | (reified_es, V_Sigma (s, t)), `snd ->
+          Project (reified_es, `snd), t (V_Neu (h, es))
+       | _ ->
+          failwith "internal error: type error reifying a projection")
 
 let equal_types ty1 ty2 =
   let ty1 = reify_type ty1 0 in
@@ -356,6 +409,8 @@ let evaluate ctxt tm =
     | Lam t           -> V_Lam (fun v -> eval t (v::env))
     | Set             -> V_Set
     | Pi (t1, t2)     -> V_Pi (eval t1 env, fun v -> eval t2 (v::env))
+    | Sigma (s, t)    -> V_Sigma (eval s env, fun v -> eval t (v::env))
+    | Pair (s, t)     -> V_Pair (eval s env, eval t env)
     | TyEq (s, t)     -> V_TyEq (eval s env, eval t env)
     | TmEq {tm1;ty1;tm2;ty2} ->
        V_TmEq { s    = eval tm1 env
@@ -388,13 +443,17 @@ let evaluate ctxt tm =
     | App (elims, tm) ->
        apply (eval_elims scrutinee elims env) (eval tm env)
     | If (elims, ty, tm_t, tm_f) ->
-       match eval_elims scrutinee elims env with
+       (match eval_elims scrutinee elims env with
          | V_True  -> eval tm_t env
          | V_False -> eval tm_f env
          | V_Neu (h, es) ->
             V_Neu (h, E_If (es, (fun v -> eval ty (v::env)),
                             eval tm_t env, eval tm_f env))
-         | _ -> failwith "internal type error: eval_elims If"
+         | _ -> failwith "internal type error: eval_elims If")
+    | Project (elims, `fst) ->
+       vfst (eval_elims scrutinee elims env)
+    | Project (elims, `snd) ->
+       vsnd (eval_elims scrutinee elims env)
   in
   eval tm
 
@@ -416,6 +475,13 @@ let rec is_type ctxt = function
   | Set -> Ok ()
   | Bool -> Ok ()
   | Pi (s, t) ->
+     (match is_type ctxt s with
+       | Ok () ->
+          let x, ctxt = Context.extend ctxt (eval_closed ctxt s) in
+          is_type ctxt (close x 0 t)
+       | Error msg ->
+          Error msg)
+  | Sigma (s, t) ->
      (match is_type ctxt s with
        | Ok () ->
           let x, ctxt = Context.extend ctxt (eval_closed ctxt s) in
@@ -449,6 +515,13 @@ and has_type ctxt ty tm = match ty, tm with
   | V_Pi (s, t), Lam tm ->
      let x, ctxt = Context.extend ctxt s in
      has_type ctxt (t (free x s)) (close x 0 tm)
+  | V_Sigma (s, t), Pair (tm_s, tm_t) ->
+     (match has_type ctxt s tm_s with
+       | Ok () ->
+          let tm_s = eval_closed ctxt tm_s in
+          has_type ctxt (t tm_s) tm_t
+       | Error msg ->
+          Error msg)
   | V_Set, Bool ->
      Ok ()
   | V_Set, Pi (s, t) ->
@@ -458,7 +531,13 @@ and has_type ctxt ty tm = match ty, tm with
           has_type ctxt V_Set (close x 0 t)
        | Error msg ->
           Error msg)
-
+  | V_Set, Sigma (s, t) ->
+     (match has_type ctxt V_Set s with
+       | Ok () ->
+          let x, ctxt = Context.extend ctxt (eval_closed ctxt s) in
+          has_type ctxt V_Set (close x 0 t)
+       | Error msg ->
+          Error msg)
   | V_Bool, (True | False) ->
      Ok ()
 
@@ -603,6 +682,22 @@ and synthesise_elims_type ctxt h = function
                 Error msg)
        | Ok _ ->
           Error (`Msg "attempt to eliminate non boolean")
+       | Error msg ->
+          Error msg)
+  | Project (elims, `fst) ->
+     (match synthesise_elims_type ctxt h elims with
+       | Ok (V_Sigma (s, t)) ->
+          Ok s
+       | Ok _ ->
+          Error (`Msg "attempt to project from expression of non pair type")
+       | Error msg ->
+          Error msg)
+  | Project (elims, `snd) ->
+     (match synthesise_elims_type ctxt h elims with
+       | Ok (V_Sigma (s, t)) ->
+          Ok (t (eval_closed ctxt (Neutral (h, elims))))
+       | Ok _ ->
+          Error (`Msg "attempt to project from expression of non pair type")
        | Error msg ->
           Error msg)
 

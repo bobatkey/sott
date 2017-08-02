@@ -1,0 +1,56 @@
+define proof_irrel :
+  (A : Set)(B : Set)(p : [A = B])(q : [A = B]) -> [p : [A = B] = q : [A = B]]
+as \A -> \B -> \p -> \q ->
+     refl
+
+define trans :
+  (A : Set)(B : Set)
+  (a : A)  (b : B)  (c : B) ->
+  [a : A = b : B] ->
+  [b : B = c : B] ->
+  [a : A = c : B]
+as
+  \A -> \B -> \a -> \b -> \c -> \p -> \q ->
+    coerce(p,[a : A = b : B],[a : A = c : B],
+           subst(B,z.[a : A = z : B],b,c,q))
+
+define symm :
+  (A : Set)(x : A)(y : A)(p : [x : A = y : A]) -> [y : A = x : A]
+as
+  \A -> \x -> \y -> \p ->
+     coerce(refl,[x : A = x : A],[y : A = x : A],subst(A,z.[z : A = x : A],x,y,p))
+
+define coh_test :
+  (A : Set)(B : Set)(x : A)(p : [A = B]) -> [x : A = coerce(x,A,B,p) : B]
+as \A -> \B -> \x -> \p ->
+     coh
+
+(*
+define symm :
+  (A : Set)(B : Set)(x : A)(y : B)(p : [x : A = y : B]) -> [y : B = x : A]
+as
+  \A -> \B -> \x -> \y -> \p ->
+    coerce(refl,[x : A = x : A],[y : B = x : A],
+           subst((X : Set) * X,
+                 z.[snd z : fst z = x : A],
+                 (A,x),
+                 (B,y),
+                 paireq ))
+                 *)
+
+(*
+subst : (P : (A : Set) -> A -> Set)
+        (A : Set)
+        (a : A)
+        (p : P A a)
+        (B : Set)
+        (b : B) ->
+        [a : A = b : B] ->
+        [P A a = P B b]
+
+or just:
+
+tyeq : [a : A = b : B] -> [A = B]
+and
+small_ty_eq : [a : A = b : B] -> [A : Set = B : Set], when A and B are in Set
+*)

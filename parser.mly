@@ -4,18 +4,23 @@ open Syntax
 type elim =
   | Apply of term
   | ElimBool of term * term * term
+  | Fst
+  | Snd
 
 let build_elim elims = function
   | Apply t                   -> App (elims, t)
   | ElimBool (ty, tm_t, tm_f) -> If (elims, ty, tm_t, tm_f)
+  | Fst                       -> Project (elims, `fst)
+  | Snd                       -> Project (elims, `snd)
 %}
 
 %token <string> IDENT
 %token LPAREN LBRACE LSQBRACK
 %token RPAREN RBRACE RSQBRACK
 %token DOT COMMA COLON SEMICOLON EQUALS
-%token ARROW
-%token TRUE FALSE BOOL CASE FOR REFL COH SUBST FUNEXT
+%token ARROW ASTERISK
+%token TRUE FALSE BOOL BY_CASES FOR REFL COH SUBST FUNEXT
+%token HASH_FST HASH_SND
 %token SET
 %token DEFINE AS
 %token COERCE
@@ -46,14 +51,20 @@ term:
     { List.fold_right (fun (id, tS) tT -> Pi (tS, bind id tT)) bs tT }
   | tS=app_term; ARROW; tT=term
     { Pi (tS, tT) }
-  | t=app_term
+  | t=sigma_term
     { t }
 
 pi_binding:
   | LPAREN; id=IDENT; COLON; tS=term; RPAREN
     { (id, tS) }
 
-(* sigma_term goes here *)
+sigma_term:
+  | LPAREN; id=IDENT; COLON; tS=term; RPAREN; ASTERISK; tT=sigma_term
+    { Sigma (tS, bind id tT) }
+  | tS=app_term; ASTERISK; tT=sigma_term
+    { Sigma (tS, tT) }
+  | t=app_term
+    { t }
 
 app_term:
   | h=head; ts=nonempty_list(elim)
@@ -84,8 +95,13 @@ base_term:
     { TmEq {tm1; ty1; tm2; ty2} }
   | h=head
     { Neutral (h, Nil) }
-  | LPAREN; t=term; RPAREN
-    { t }
+  | LPAREN; ts=separated_list(COMMA, term); RPAREN
+    { let rec build = function
+        | []    -> failwith "FIXME: implement the unit type"
+        | [t]   -> t
+        | [s;t] -> Pair (s,t)
+        | t::ts -> Pair (t,build ts)
+      in build ts }
 
 head:
   | COERCE; LPAREN; coercee=term; COMMA; src_type=term; COMMA; tgt_type=term; COMMA; eq_proof=term; RPAREN
@@ -96,5 +112,9 @@ head:
 elim:
   | t=base_term
       { Apply t }
-  | CASE; FOR; x=IDENT; DOT; ty=term; LBRACE; TRUE; ARROW; tm_t=term; SEMICOLON; FALSE; ARROW; tm_f=term; RBRACE
+  | BY_CASES; FOR; x=IDENT; DOT; ty=term; LBRACE; TRUE; ARROW; tm_t=term; SEMICOLON; FALSE; ARROW; tm_f=term; RBRACE
       { ElimBool (bind x ty, tm_t, tm_f) }
+  | HASH_FST
+      { Fst }
+  | HASH_SND
+      { Snd }

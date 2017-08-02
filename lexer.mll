@@ -30,11 +30,12 @@ rule token = parse
 | '.'       { DOT }
 | "->"      { ARROW }
 | ","       { COMMA }
+| "*"       { ASTERISK }
 | "\\"      { BACKSLASH }
 | "Bool"    { BOOL }
 | "True"    { TRUE }
 | "False"   { FALSE }
-| "case"    { CASE }
+| "by_cases" { BY_CASES }
 | "for"     { FOR }
 | "refl"    { REFL }
 | "coerce"  { COERCE }
