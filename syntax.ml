@@ -28,7 +28,7 @@ type term =
   | False
 
   | TyEq of term * term
-  | TmEq of term * term * term * term
+  | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
 
   (* proof constructors *)
   | Subst of { ty_s : term
@@ -81,9 +81,12 @@ let bind x ?(offset=0) term =
        Pi (bind_term x j s, bind_term x (j+1) t)
     | TyEq (s, t) ->
        TyEq (bind_term x j s, bind_term x j t)
-    | TmEq (s, ty_s, t, ty_t) ->
-       TmEq (bind_term x j s, bind_term x j ty_s,
-             bind_term x j t, bind_term x j ty_t)
+    | TmEq {tm1;ty1;tm2;ty2} ->
+       TmEq { tm1 = bind_term x j tm1
+            ; ty1 = bind_term x j ty1
+            ; tm2 = bind_term x j tm2
+            ; ty2 = bind_term x j ty2
+            }
     | (Bool | True | False) as t -> t
     | Subst { ty_s; ty_t; tm_x; tm_y; tm_e } ->
        Subst { ty_s = bind_term x j ty_s
@@ -128,8 +131,12 @@ let rec close x j = function
   | Set -> Set
   | Pi (s, t) -> Pi (close x j s, close x (j+1) t)
   | TyEq (s, t) -> TyEq (close x j s, close x j t)
-  | TmEq (s, ty_s, t, ty_t) ->
-     TmEq (close x j s, close x j ty_s, close x j t, close x j ty_t)
+  | TmEq {tm1;ty1;tm2;ty2} ->
+     TmEq { tm1 = close x j tm1
+          ; ty1 = close x j ty1
+          ; tm2 = close x j tm2
+          ; ty2 = close x j ty2
+          }
   | (Bool | True | False) as t -> t
   | Subst s ->
      Subst { ty_s = close x j s.ty_s
@@ -229,8 +236,11 @@ let rec reify_type v i = match v with
   | V_Bool        -> Bool
   | V_TyEq (s, t) -> TyEq (reify_type s i, reify_type t i)
   | V_TmEq (s, s_ty, t, t_ty) ->
-     TmEq (reify s_ty s i, reify_type s_ty i,
-           reify t_ty t i, reify_type t_ty i)
+     TmEq { tm1 = reify s_ty s i
+          ; ty1 = reify_type s_ty i
+          ; tm2 = reify t_ty t i
+          ; ty2 = reify_type t_ty i
+          }
   | V_Neu (h, es) -> reify_neutral h es i
   | _             -> failwith "Blah"
 
@@ -347,8 +357,8 @@ let evaluate ctxt tm =
     | Set             -> V_Set
     | Pi (t1, t2)     -> V_Pi (eval t1 env, fun v -> eval t2 (v::env))
     | TyEq (s, t)     -> V_TyEq (eval s env, eval t env)
-    | TmEq (s, s_ty, t, t_ty) ->
-       V_TmEq (eval s env, eval s_ty env, eval t env, eval t_ty env)
+    | TmEq {tm1;ty1;tm2;ty2} ->
+       V_TmEq (eval tm1 env, eval ty1 env, eval tm2 env, eval ty2 env)
     | Bool  -> V_Bool
     | True  -> V_True
     | False -> V_False
@@ -412,12 +422,12 @@ let rec is_type ctxt = function
      (match is_type ctxt s with
        | Ok ()     -> is_type ctxt t
        | Error msg -> Error msg)
-  | TmEq (s, s_ty, t, t_ty) ->
-     (match is_type ctxt s_ty, is_type ctxt t_ty with
+  | TmEq {tm1; ty1; tm2; ty2} ->
+     (match is_type ctxt ty1, is_type ctxt ty2 with
        | Ok (), Ok () ->
-          let s_ty = eval_closed ctxt s_ty in
-          let t_ty = eval_closed ctxt t_ty in
-          (match has_type ctxt s_ty s, has_type ctxt t_ty t with
+          let ty1 = eval_closed ctxt ty1 in
+          let ty2 = eval_closed ctxt ty2 in
+          (match has_type ctxt ty1 tm1, has_type ctxt ty2 tm2 with
             | Ok (), Ok () ->
                Ok ()
             | _ ->

@@ -81,7 +81,7 @@ base_term:
   | LSQBRACK; ty1=term; EQUALS; ty2=term; RSQBRACK
     { TyEq (ty1, ty2) }
   | LSQBRACK; tm1=term; COLON; ty1=term; EQUALS; tm2=term; COLON; ty2=term; RSQBRACK
-    { TmEq (tm1, ty1, tm2, ty2) }
+    { TmEq {tm1; ty1; tm2; ty2} }
   | h=head
     { Neutral (h, Nil) }
   | LPAREN; t=term; RPAREN

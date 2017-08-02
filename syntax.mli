@@ -9,7 +9,7 @@ type term =
   | False
 
   | TyEq of term * term
-  | TmEq of term * term * term * term
+  | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
 
   (* equality proof constructors *)
   | Subst of { ty_s : term
