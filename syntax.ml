@@ -538,6 +538,26 @@ and has_type ctxt ty tm = match ty, tm with
           has_type ctxt V_Set (close x 0 t)
        | Error msg ->
           Error msg)
+  | V_Set, TyEq (s, t) ->
+     (match is_type ctxt s with
+       | Ok ()     -> is_type ctxt t
+       | Error msg -> Error msg)
+  | V_Set, TmEq {tm1; ty1; tm2; ty2} ->
+     (match is_type ctxt ty1, is_type ctxt ty2 with
+       | Ok (), Ok () ->
+          let ty1 = eval_closed ctxt ty1 in
+          let ty2 = eval_closed ctxt ty2 in
+          (match has_type ctxt ty1 tm1, has_type ctxt ty2 tm2 with
+            | Ok (), Ok () ->
+               Ok ()
+            | _ ->
+               Error (`Msg "term(s) not of right type in term equality"))
+       | Error msg, _ ->
+          Error msg
+       | Ok _, Error msg ->
+          Error msg)
+
+
   | V_Bool, (True | False) ->
      Ok ()
 
