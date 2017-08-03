@@ -44,6 +44,8 @@ rule token = parse
 | "funext"  { FUNEXT }
 | "define"  { DEFINE }
 | "as"      { AS }
+| "#fst"    { HASH_FST }
+| "#snd"    { HASH_SND }
 | id        { IDENT (Lexing.lexeme lexbuf) }
 | "(*"      { comment lexbuf; token lexbuf }
 | eof       { EOF }
