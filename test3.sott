@@ -6,7 +6,9 @@ define inl :
   (A:Set)(B:Set) -> A -> sum A B
 as \A -> \B -> \a -> (True, a)
 
-(* Failure of canonicity -- see notebook *)
+(* Failure of canonicity -- if coerce doesn't compute past the pair,
+   then we get a coercion expression where there ought to be a boolean
+   in the first component of the pair. *)
 
 define and :
   Bool -> Bool -> Bool
@@ -31,7 +33,8 @@ as
                 { True -> refl; False -> refl })
 
 define F : (Bool -> Bool) -> Set
-as \f -> sum [f : Bool -> Bool = \x -> False : Bool -> Bool] [f : Bool -> Bool = \x -> True : Bool -> Bool]
+as \f -> sum [f : Bool -> Bool = \x -> False : Bool -> Bool]
+             [f : Bool -> Bool = \x -> True : Bool -> Bool]
 
 define v : F (\x -> False)
 as (True, refl)
@@ -40,7 +43,8 @@ define hofmann2 : F (\x -> and x False)
 as coerce(v, F (\x -> False), F (\x -> and x False),
           subst(Bool -> Bool,x. F x, (\x -> False), (\x -> and x False), eq_funcs))
 
-(*
 define test :
-  [hofmann : F (\x -> and x False) = (true, coerce
-*)
+  [hofmann2 : F (\x -> and x False) =
+   (True, symm (Bool -> Bool) (\x -> False) (\x -> and x False) eq_funcs) : F (\x -> and x False)]
+as
+  refl

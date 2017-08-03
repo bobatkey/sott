@@ -14,6 +14,8 @@
 
    but this should be avoided by making equality explicit in inductive families
    (a la Epigram 2/Foveran)
+
+   FIXME: the above is slightly wrong...
 *)
 
 
@@ -525,7 +527,8 @@ let rec is_type ctxt = function
        | Ok _, Error msg ->
           Error msg)
   (* FIXME: only remaining possibility is Neutral: synthesise the type
-     and check that it is Set for some set level. *)
+     and check that it is Set for some set level. This would allow a
+     hierarchy of Sets. *)
   | tm ->
      has_type ctxt V_Set tm
 
@@ -591,12 +594,12 @@ and has_type ctxt ty tm = match ty, tm with
                 (let ty_t v = evaluate ctxt ty_t [v] in
                  match has_type ctxt ty_s tm_x, has_type ctxt ty_s tm_y with
                    | Ok (), Ok () ->
-                      let tm_x = eval_closed ctxt tm_x in
-                      let tm_y = eval_closed ctxt tm_y in
-                      let ty   =
-                        V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s }
-                      in
-                      (match has_type ctxt ty tm_e with
+                      (let tm_x = eval_closed ctxt tm_x in
+                       let tm_y = eval_closed ctxt tm_y in
+                       let ty   =
+                         V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s }
+                       in
+                       match has_type ctxt ty tm_e with
                          | Ok () ->
                             if (equal_types (ty_t tm_x) ty1
                                 && equal_types (ty_t tm_y) ty2)
@@ -726,6 +729,10 @@ and synthesise_elims_type ctxt h = function
      (match synthesise_elims_type ctxt h elims with
        | Ok (V_Sigma (s, t)) ->
           Ok s
+       | Ok (V_TyEq (V_Pi (s,t), V_Pi (s',t'))) ->
+          Ok (V_TyEq (s',s))
+       | Ok (V_TyEq (V_Sigma (s,t), V_Sigma (s',t'))) ->
+          Ok (V_TyEq (s,s'))
        | Ok _ ->
           Error (`Msg "attempt to project from expression of non pair type")
        | Error msg ->
@@ -734,6 +741,12 @@ and synthesise_elims_type ctxt h = function
      (match synthesise_elims_type ctxt h elims with
        | Ok (V_Sigma (s, t)) ->
           Ok (t (eval_closed ctxt (Neutral (h, elims))))
+       | Ok (V_TyEq (V_Pi (s,t), V_Pi (s',t')))
+       | Ok (V_TyEq (V_Sigma (s,t), V_Sigma (s',t'))) ->
+          Ok (V_Pi (s, fun vs ->
+              V_Pi (s', fun vs' ->
+                  V_Pi (V_TmEq { s=vs; s_ty=s; t=vs'; t_ty=s' }, fun _ ->
+                      V_TyEq (t vs, t' vs')))))
        | Ok _ ->
           Error (`Msg "attempt to project from expression of non pair type")
        | Error msg ->
