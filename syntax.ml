@@ -520,8 +520,10 @@ let rec is_type ctxt = function
           (match has_type ctxt ty1 tm1, has_type ctxt ty2 tm2 with
             | Ok (), Ok () ->
                Ok ()
-            | _ ->
-               Error (`Msg "term(s) not of right type in term equality"))
+            | Error msg, _ ->
+               Error msg
+            | _, Error msg ->
+               Error msg)
        | Error msg, _ ->
           Error msg
        | Ok _, Error msg ->
