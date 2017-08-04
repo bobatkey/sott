@@ -1,10 +1,13 @@
+type 'a binder =
+  | B  of string * 'a
+
 type term =
   | Neutral of head * elims
 
-  | Lam of term
+  | Lam of term binder
   | Set
-  | Pi  of term * term
-  | Sigma of term * term
+  | Pi  of term * term binder
+  | Sigma of term * term binder
   | Pair of term * term
   | Bool
   | True
@@ -15,14 +18,14 @@ type term =
 
   (* equality proof constructors *)
   | Subst of { ty_s : term
-             ; ty_t : term
+             ; ty_t : term binder
              ; tm_x : term
              ; tm_y : term
              ; tm_e : term
              }
   | Refl
   | Coh
-  | Funext of term
+  | Funext of term binder binder binder
 
   (* placeholder for an erased proof term; only generated during
      reification. *)
@@ -40,10 +43,12 @@ and head =
 and elims =
   | Nil
   | App of elims * term
-  | If  of elims * term * term * term
+  | If  of elims * term binder * term * term
   | Project of elims * [`fst | `snd]
 
-val bind : string -> ?offset:int -> term -> term
+val bind : string -> term -> term binder
+val bind3 : string -> string -> string -> term -> term binder binder binder
+val bind_anon : term -> term binder
 
 (** Internal representation of checked terms *)
 type value
@@ -60,8 +65,14 @@ module Context : sig
   val lookup_exn : string -> t -> value * value option
 end
 
-val eval_closed : Context.t -> term -> value
+type error_message =
+  [ `Msg of string
+  | `Type_mismatch of term * term
+  | `VarNotFound of string
+  ]
 
-val is_type : Context.t -> term -> (unit, [>`Msg of string | `Type_mismatch of term * term]) result
+val eval0 : Context.t -> term -> value
 
-val has_type : Context.t -> value -> term -> (unit, [> `Msg of string | `Type_mismatch of term * term]) result
+val is_type : Context.t -> term -> (unit, [> error_message]) result
+
+val has_type : Context.t -> value -> term -> (unit, [> error_message]) result

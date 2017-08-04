@@ -3,7 +3,7 @@ open Syntax
 
 type elim =
   | Apply of term
-  | ElimBool of term * term * term
+  | ElimBool of term binder * term * term
   | Fst
   | Snd
 
@@ -50,7 +50,7 @@ term:
   | bs=nonempty_list(pi_binding); ARROW; tT=term
     { List.fold_right (fun (id, tS) tT -> Pi (tS, bind id tT)) bs tT }
   | tS=app_term; ARROW; tT=term
-    { Pi (tS, tT) }
+    { Pi (tS, bind_anon tT) }
   | t=sigma_term
     { t }
 
@@ -62,7 +62,7 @@ sigma_term:
   | LPAREN; id=IDENT; COLON; tS=term; RPAREN; ASTERISK; tT=sigma_term
     { Sigma (tS, bind id tT) }
   | tS=app_term; ASTERISK; tT=sigma_term
-    { Sigma (tS, tT) }
+    { Sigma (tS, bind_anon tT) }
   | t=app_term
     { t }
 
@@ -78,7 +78,7 @@ base_term:
   | COH
     { Coh }
   | FUNEXT; LPAREN; x1=IDENT; x2=IDENT; xe=IDENT; DOT; e=term; RPAREN
-    { Funext (bind x1 ~offset:2 (bind x2 ~offset:1 (bind xe e))) }
+    { Funext (bind3 x1 x2 xe e) }
   | SUBST; LPAREN; ty_s=term; COMMA; x=IDENT; DOT; ty_t=term; COMMA; tm_x=term; COMMA; tm_y=term; COMMA; tm_e=term; RPAREN
     { Subst { ty_s; ty_t = bind x ty_t; tm_x; tm_y; tm_e } }
   | SET
