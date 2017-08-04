@@ -45,8 +45,8 @@ whole_term:
   | t=term; EOF { t }
 
 term:
-  | BACKSLASH; x=IDENT; ARROW; t=term
-    { Lam (bind x t) }
+  | BACKSLASH; xs=nonempty_list(IDENT); ARROW; t=term
+    { List.fold_right (fun x t -> Lam (bind x t)) xs t }
   | bs=nonempty_list(pi_binding); ARROW; tT=term
     { List.fold_right (fun (id, tS) tT -> Pi (tS, bind id tT)) bs tT }
   | tS=app_term; ARROW; tT=term

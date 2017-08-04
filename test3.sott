@@ -1,10 +1,16 @@
 define sum :
   Set -> Set -> Set
-as \A -> \B -> (x : Bool) * x by_cases for x. Set { True -> A; False -> B }
+as \A B -> (x : Bool) * x by_cases for x. Set { True -> A; False -> B }
 
 define inl :
   (A:Set)(B:Set) -> A -> sum A B
-as \A -> \B -> \a -> (True, a)
+as \A B a -> (True, a)
+
+define symm :
+  (A : Set)(x : A)(y : A)(p : [x : A = y : A]) -> [y : A = x : A]
+as
+  \A x y p ->
+     coerce(refl,[x : A = x : A],[y : A = x : A],subst(A,z.[z : A = x : A],x,y,p))
 
 (* Failure of canonicity -- if coerce doesn't compute past the pair,
    then we get a coercion expression where there ought to be a boolean
@@ -12,14 +18,14 @@ as \A -> \B -> \a -> (True, a)
 
 define and :
   Bool -> Bool -> Bool
-as \x -> \y -> x by_cases for y. Bool { True -> y; False -> False }
+as \x y -> x by_cases for y. Bool { True -> y; False -> False }
 
 (* An easier to use functional extensionality principle *)
 define funext2 :
   (S : Set)(T : S -> Set)(f : (x : S) -> T x)(g : (x : S) -> T x) ->
   ((x : S) -> [f x : T x = g x : T x]) ->
   [f : (x : S) -> T x = g : (x : S) -> T x]
-as \S -> \T -> \f -> \g -> \e ->
+as \S T f g e ->
    funext (x1 x2 xe. coerce(e x1,
                             [f x1 : T x1 = g x1 : T x1],
                             [f x1 : T x1 = g x2 : T x2],
@@ -45,6 +51,8 @@ as coerce(v, F (\x -> False), F (\x -> and x False),
 
 define test :
   [hofmann2 : F (\x -> and x False) =
-   (True, symm (Bool -> Bool) (\x -> False) (\x -> and x False) eq_funcs) : F (\x -> and x False)]
+   (True, symm (Bool -> Bool) (\x -> False) (\x -> and x False) eq_funcs)
+      : F (\x -> and x False)
+      ]
 as
   refl
