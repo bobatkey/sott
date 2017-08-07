@@ -2,20 +2,20 @@
 open Syntax
 
 type elim =
-  | Apply    of term
-  | ElimBool of term binder * term * term
-  | Project  of [`fst | `snd]
+  | Apply    of term * Location.t
+  | ElimBool of term binder * term * term * Location.t
+  | Project  of [`fst | `snd] * Location.t
 
 let nil =
   { elims_data = Nil; elims_loc = Location.generated }
 
 let build_elim elims = function
-  | Apply t                   -> { elims_data = App (elims, t)
-                                 ; elims_loc  = Location.generated }
-  | ElimBool (ty, tm_t, tm_f) -> { elims_data = If (elims, ty, tm_t, tm_f)
-                                 ; elims_loc  = Location.generated }
-  | Project dir               -> { elims_data = Project (elims, dir)
-                                 ; elims_loc  = Location.generated }
+  | Apply (t, elims_loc) ->
+     { elims_data = App (elims, t); elims_loc }
+  | ElimBool (ty, tm_t, tm_f, elims_loc) ->
+     { elims_data = If (elims, ty, tm_t, tm_f); elims_loc }
+  | Project (dir, elims_loc) ->
+     { elims_data = Project (elims, dir); elims_loc }
 %}
 
 %token <string> IDENT
@@ -128,8 +128,7 @@ base_term:
     { { term_data = TmEq {tm1; ty1; tm2; ty2}
       ; term_loc  = Location.mk $startpos $endpos } }
   | h=head
-    { { term_data = Neutral (h, { elims_data = Nil
-                                ; elims_loc  = Location.generated })
+    { { term_data = Neutral (h, nil)
       ; term_loc  = Location.mk $startpos $endpos } }
   | LPAREN; ts=separated_list(COMMA, term); RPAREN
     { let rec build = function
@@ -155,13 +154,13 @@ head:
 
 elim:
   | t=base_term
-      { Apply t }
+      { Apply (t, Location.mk $startpos $endpos) }
   | BY_CASES; FOR; x=IDENT; DOT; ty=term;
       LBRACE; TRUE; ARROW; tm_t=term;
    SEMICOLON; FALSE; ARROW; tm_f=term;
       RBRACE
-      { ElimBool (Scoping.bind x ty, tm_t, tm_f) }
+      { ElimBool (Scoping.bind x ty, tm_t, tm_f, Location.mk $startpos $endpos) }
   | HASH_FST
-      { Project `fst }
+      { Project (`fst, Location.mk $startpos $endpos) }
   | HASH_SND
-      { Project `snd }
+      { Project (`snd, Location.mk $startpos $endpos) }

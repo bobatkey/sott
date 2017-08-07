@@ -70,6 +70,12 @@ let mk_term term_data =
 let mk_head head_data =
   { head_data; head_loc = Location.generated }
 
+let location_of_term term =
+  term.term_loc
+
+let location_of_neutral h elims =
+  Location.mk_span h.head_loc elims.elims_loc
+
 
 module AlphaEquality = struct
 
@@ -201,7 +207,7 @@ end = struct
          }
       | {term_data = Pair (t1, t2)} as tm ->
          { tm with
-             term_data =  Pair (traverse_term j t1, traverse_term j t2)
+             term_data = Pair (traverse_term j t1, traverse_term j t2)
          }
       | {term_data = TyEq (s, t)} as tm ->
          { tm with
@@ -877,10 +883,12 @@ and synthesise_elims_type ctxt h = function
        | V_Pi (s, VB (_, t)) ->
           has_type ctxt s tm >>= fun () ->
           Ok (t (Evaluation.eval0 ctxt tm))
-       | _ ->
-          (* error: attenpt to apply 'elims' to 'tm', but elims has
-             type 'bloo' and cannot be used as a function. *)
+       | ty ->
           Error (`MsgLoc (elims_loc, "attempt to apply non function")))
+(*          let loc1 = location_of_neutral h elims in
+          let loc2 = location_of_term tm in
+          let ty   = reify_type ty 0 in
+            Error (`BadApplication (loc1, loc2, ty)))*)
 
   | { elims_data = If (elims, elim_ty, tm_t, tm_f); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= function
@@ -904,6 +912,8 @@ and synthesise_elims_type ctxt h = function
        | V_TyEq (V_Sigma (s,t), V_Sigma (s',t')) ->
           Ok (V_TyEq (s,s'))
        | _ ->
+          let _loc1 = location_of_neutral h elims in
+          let _loc2 = elims_loc in
           Error (`MsgLoc (elims_loc, "attempt to project from expression of non pair type")))
 
   | { elims_data = Project (elims, `snd); elims_loc } ->

@@ -41,6 +41,6 @@ define test :
   [hofmann : Bool = True : Bool]
 as refl
 
-define coh_test :
-  (e : [Bool = Bool])(b : Bool) -> [b : Bool = coerce(b,Bool,Bool,e) : Bool]
-as \e b -> coh
+define coherence_test :
+  (A:Set)(B:Set)(e : [A = B])(a : A) -> [a : A = coerce(a,A,B,e) : B]
+as \A B e a -> coherence

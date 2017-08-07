@@ -32,7 +32,7 @@ rule token = parse
 | "for"     { FOR }
 | "refl"    { REFL }
 | "coerce"  { COERCE }
-| "coh"     { COH }
+| "coherence" { COH }
 | "subst"   { SUBST }
 | "funext"  { FUNEXT }
 | "define"  { DEFINE }
