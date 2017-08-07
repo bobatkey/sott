@@ -149,7 +149,7 @@ head:
     { { head_data = Coerce { coercee; src_type; tgt_type; eq_proof }
       ; head_loc  = Location.mk $startpos $endpos } }
   | id=IDENT
-    { { head_data = Free id;
+    { { head_data = Free_global id;
         head_loc  = Location.mk $startpos $endpos } }
 
 elim:

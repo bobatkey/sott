@@ -45,7 +45,8 @@ and head =
 
 and head_data =
   | Bound  of int
-  | Free   of string
+  | Free_local of string
+  | Free_global of string
   | Coerce of { coercee  : term
               ; src_type : term
               ; tgt_type : term
@@ -125,7 +126,8 @@ module AlphaEquality = struct
 
   and equal_head h1 h2 = match h1.head_data, h2.head_data with
     | Bound i, Bound j -> i = j
-    | Free nm, Free nm' -> nm = nm'
+    | Free_local nm, Free_local nm' -> nm = nm'
+    | Free_global nm, Free_global nm' -> nm = nm'
     | Coerce { coercee; src_type; tgt_type; eq_proof },
       Coerce { coercee=coercee'; src_type=src_type'
              ; tgt_type=tgt_type'; eq_proof=eq_proof' } ->
@@ -244,8 +246,10 @@ end = struct
     and traverse_head j = function
       | { head_data = Bound i } as h ->
          { h with head_data = bound i j }
-      | { head_data = Free nm } as h ->
+      | { head_data = Free_global nm } as h ->
          { h with head_data = free nm j }
+      | { head_data = Free_local _ } as h ->
+         h
       | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } as h ->
          { h with
               head_data = 
@@ -279,12 +283,12 @@ end = struct
 
   let close_term x =
     traverse
-      ~free:(fun nm j -> Free nm)
-      ~bound:(fun i j -> if i = j then Free x else Bound i)
+      ~free:(fun nm j -> Free_global nm)
+      ~bound:(fun i j -> if i = j then Free_local x else Bound i)
 
   let bind_term x =
     traverse
-      ~free:(fun nm j -> if nm = x then Bound j else Free nm)
+      ~free:(fun nm j -> if nm = x then Bound j else Free_global nm)
       ~bound:(fun i j -> Bound i)
 
   let bind x t =
@@ -342,12 +346,13 @@ and v_elims =
   | E_Project of v_elims * [`fst|`snd]
 
 and v_head =
-  | H_Var  of { shift : shift; typ : value }
-  | H_Free of { name  : string; typ : value }
-  | H_Coe  of { coercee  : value
-              ; src_type : value
-              ; tgt_type : value
-              }
+  | H_Var of { shift : shift; typ : value }
+  | H_Free_local of { name  : string; typ : value }
+  | H_Free_global of { name  : string; typ : value }
+  | H_Coe of { coercee  : value
+             ; src_type : value
+             ; tgt_type : value
+             }
 
 
 let apply v1 v2 = match v1 with
@@ -394,7 +399,7 @@ let var ty i =
   V_Neutral (H_Var { shift = i; typ = ty }, E_Nil)
 
 let free x ty =
-  V_Neutral (H_Free { name = x; typ = ty }, E_Nil)
+  V_Neutral (H_Free_local { name = x; typ = ty }, E_Nil)
 
 (**********************************************************************)
 (* FIXME: equality test rather than reify to term and check for alpha
@@ -450,9 +455,13 @@ and reify_neutral h es i : term = match h with
      let es, _ = reify_elims h typ es i in
      let h     = mk_head (Bound (i-shift-1)) in
      mk_term (Neutral (h, es))
-  | H_Free { name; typ } ->
+  | H_Free_local { name; typ } ->
      let es, _ = reify_elims h typ es i in
-     let h     = mk_head (Free name) in
+     let h     = mk_head (Free_local name) in
+     mk_term (Neutral (h, es))
+  | H_Free_global { name; typ } ->
+     let es, _ = reify_elims h typ es i in
+     let h     = mk_head (Free_global name) in
      mk_term (Neutral (h, es))
   | H_Coe { coercee; src_type; tgt_type } ->
      let ty1_tm = reify_type src_type i in
@@ -516,12 +525,14 @@ module Context : sig
   type t
 
   type nonrec value = value
-  
+
   val empty : t
 
   val extend : string -> value -> t -> string * t
 
-  val lookup : string -> t -> (value, [>`VarNotFound of string]) result
+  val lookup_local : string -> t -> (value, [>`VarNotFound of string]) result
+
+  val lookup_global : string -> t -> (value, [>`VarNotFound of string]) result
 
   val lookup_exn : string -> t -> value * value option
 
@@ -535,39 +546,58 @@ end = struct
     }
 
   type t =
-    { next_var : int
-    ; entries  : entry VarMap.t
+    { global_entries    : entry VarMap.t
+    ; local_entries     : entry VarMap.t
+    ; local_entry_order : string list
     }
 
   type nonrec value = value
   
   let empty =
-    { next_var = 0; entries = VarMap.empty }
-
-  (* FIXME: what if we extend with a name that is already free in the
-     term? *)
-  let extend _varnm value ctxt =
-    let var = "_x"^string_of_int ctxt.next_var in
-    let entry = { entry_type = value; entry_defn = None } in
-    var,
-    { next_var = ctxt.next_var + 1
-    ; entries  = VarMap.add var entry ctxt.entries
+    { global_entries = VarMap.empty
+    ; local_entries  = VarMap.empty
+    ; local_entry_order = []
     }
 
-  let lookup nm ctxt =
-    match VarMap.find nm ctxt.entries with
+  let taken_of_ctxt ctxt nm =
+    VarMap.mem nm ctxt.global_entries
+    || VarMap.mem nm ctxt.local_entries
+  
+  (* FIXME: what if we extend with a name that is already free in the
+     term? Need to distinguish free local and free global. *)
+  let extend nm entry_type ctxt =
+    let nm = Name_supply.freshen_for (taken_of_ctxt ctxt) nm in
+    let entry = { entry_type; entry_defn = None } in
+    nm,
+    { ctxt with
+        local_entries     = VarMap.add nm entry ctxt.local_entries
+      ; local_entry_order = nm :: ctxt.local_entry_order
+    }
+
+  let lookup_local nm ctxt =
+    match VarMap.find nm ctxt.local_entries with
+      | exception Not_found ->
+         Error (`VarNotFound nm)
+      | {entry_type} ->
+         Ok entry_type
+
+  let lookup_global nm ctxt =
+    match VarMap.find nm ctxt.global_entries with
       | exception Not_found ->
          Error (`VarNotFound nm)
       | {entry_type} ->
          Ok entry_type
 
   let lookup_exn nm ctxt =
-    let {entry_type; entry_defn} = VarMap.find nm ctxt.entries in
-    (entry_type, entry_defn)
+    match VarMap.find nm ctxt.local_entries with
+      | {entry_type;entry_defn} -> (entry_type, entry_defn)
+      | exception Not_found ->
+         let {entry_type; entry_defn} = VarMap.find nm ctxt.global_entries in
+         (entry_type, entry_defn)
 
   let extend_with_defn nm ~ty ~tm ctxt =
     let entry = { entry_type = ty; entry_defn = Some tm } in
-    { ctxt with entries = VarMap.add nm entry ctxt.entries }
+    { ctxt with global_entries = VarMap.add nm entry ctxt.global_entries }
 end
 
 (******************************************************************************)
@@ -624,11 +654,18 @@ end = struct
          V_Irrel
 
     and eval_head h env = match h.head_data with
-      | Bound i -> List.nth env i (* FIXME: something better than lists? *)
-      | Free nm ->
+      | Bound i ->
+         List.nth env i (* FIXME: something better than lists? *)
+      | Free_local nm ->
          (match Context.lookup_exn nm ctxt with
            | typ, None ->
-              V_Neutral (H_Free { name = nm; typ }, E_Nil)
+              V_Neutral (H_Free_local { name = nm; typ }, E_Nil)
+           | typ, Some defn ->
+              defn)
+      | Free_global nm ->
+         (match Context.lookup_exn nm ctxt with
+           | typ, None ->
+              V_Neutral (H_Free_global { name = nm; typ }, E_Nil)
            | typ, Some defn ->
               defn)
       | Coerce { coercee; src_type; tgt_type } ->
@@ -849,7 +886,7 @@ and has_type ctxt ty tm = match ty, tm with
        Error (`MsgLoc (term_loc, "invalid Coh"))
 
   | V_TmEq _, { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a term equality, but isn't"))
+     Error (`MsgLoc (term_loc, "This term is expected to be a proof of a term equality, but isn't"))
 
   | (V_True | V_False | V_Lam _ | V_Pair _ | V_Irrel | V_Neutral _), _ ->
      failwith "internal error: has_type: attempting to check canonical term aganst non canonical type"
@@ -858,8 +895,15 @@ and synthesise_head_type ctxt = function
   | { head_data = Bound _ } ->
      failwith "internal error: bound variable has got free"
 
-  | { head_data = Free nm; head_loc } ->
-     (match Context.lookup nm ctxt with
+  | { head_data = Free_local nm; head_loc } ->
+     (match Context.lookup_local nm ctxt with
+       | Ok ty ->
+          Ok ty
+       | Error (`VarNotFound nm) ->
+          Error (`VarNotFound (head_loc, nm)))
+
+  | { head_data = Free_global nm; head_loc } ->
+     (match Context.lookup_global nm ctxt with
        | Ok ty ->
           Ok ty
        | Error (`VarNotFound nm) ->

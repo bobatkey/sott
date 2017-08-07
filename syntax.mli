@@ -46,7 +46,8 @@ and head =
 
 and head_data =
   | Bound  of int
-  | Free   of string
+  | Free_local of string
+  | Free_global of string
   | Coerce of { coercee  : term
               ; src_type : term
               ; tgt_type : term
