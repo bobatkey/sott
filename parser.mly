@@ -46,11 +46,11 @@ whole_term:
 
 term:
   | BACKSLASH; xs=nonempty_list(IDENT); ARROW; t=term
-    { List.fold_right (fun x t -> Lam (bind x t)) xs t }
+    { List.fold_right (fun x t -> Lam (Scoping.bind x t)) xs t }
   | bs=nonempty_list(pi_binding); ARROW; tT=term
-    { List.fold_right (fun (id, tS) tT -> Pi (tS, bind id tT)) bs tT }
+    { List.fold_right (fun (id, tS) tT -> Pi (tS, Scoping.bind id tT)) bs tT }
   | tS=app_term; ARROW; tT=term
-    { Pi (tS, bind_anon tT) }
+    { Pi (tS, Scoping.bind_anon tT) }
   | t=sigma_term
     { t }
 
@@ -60,9 +60,9 @@ pi_binding:
 
 sigma_term:
   | LPAREN; id=IDENT; COLON; tS=term; RPAREN; ASTERISK; tT=sigma_term
-    { Sigma (tS, bind id tT) }
+    { Sigma (tS, Scoping.bind id tT) }
   | tS=app_term; ASTERISK; tT=sigma_term
-    { Sigma (tS, bind_anon tT) }
+    { Sigma (tS, Scoping.bind_anon tT) }
   | t=app_term
     { t }
 
@@ -78,9 +78,9 @@ base_term:
   | COH
     { Coh }
   | FUNEXT; LPAREN; x1=IDENT; x2=IDENT; xe=IDENT; DOT; e=term; RPAREN
-    { Funext (bind3 x1 x2 xe e) }
+    { Funext (Scoping.bind3 x1 x2 xe e) }
   | SUBST; LPAREN; ty_s=term; COMMA; x=IDENT; DOT; ty_t=term; COMMA; tm_x=term; COMMA; tm_y=term; COMMA; tm_e=term; RPAREN
-    { Subst { ty_s; ty_t = bind x ty_t; tm_x; tm_y; tm_e } }
+    { Subst { ty_s; ty_t = Scoping.bind x ty_t; tm_x; tm_y; tm_e } }
   | SET
     { Set }
   | BOOL
@@ -113,7 +113,7 @@ elim:
   | t=base_term
       { Apply t }
   | BY_CASES; FOR; x=IDENT; DOT; ty=term; LBRACE; TRUE; ARROW; tm_t=term; SEMICOLON; FALSE; ARROW; tm_f=term; RBRACE
-      { ElimBool (bind x ty, tm_t, tm_f) }
+      { ElimBool (Scoping.bind x ty, tm_t, tm_f) }
   | HASH_FST
       { Fst }
   | HASH_SND

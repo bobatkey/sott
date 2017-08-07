@@ -22,14 +22,14 @@ let rec process_decls ctxt = function
             id (string_of_msg msg);
           Error ()
        | Ok () ->
-          let ty = Syntax.eval0 ctxt ty in
+          let ty = Syntax.Evaluation.eval0 ctxt ty in
           match Syntax.has_type ctxt ty tm with
             | Error msg ->
                Printf.eprintf "ERR: Checking '%s' body: %s\n%!"
                  id (string_of_msg msg);
                Error ()
             | Ok () ->
-               let tm = Syntax.eval0 ctxt tm in
+               let tm = Syntax.Evaluation.eval0 ctxt tm in
                let ctxt = Syntax.Context.extend_with_defn id ~ty ~tm ctxt in
                process_decls ctxt decls)
 

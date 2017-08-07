@@ -46,16 +46,14 @@ and elims =
   | If  of elims * term binder * term * term
   | Project of elims * [`fst | `snd]
 
-val bind : string -> term -> term binder
-val bind3 : string -> string -> string -> term -> term binder binder binder
-val bind_anon : term -> term binder
+module Scoping : sig
+  val bind : string -> term -> term binder
+  val bind3 : string -> string -> string -> term -> term binder binder binder
+  val bind_anon : term -> term binder
+end
 
 (** Internal representation of checked terms *)
 type value
-
-val reify_type : value -> int -> term
-
-val reify : value -> value -> int -> term
 
 module Context : sig
   type t
@@ -65,13 +63,15 @@ module Context : sig
   val lookup_exn : string -> t -> value * value option
 end
 
+module Evaluation : sig
+  val eval0 : Context.t -> term -> value
+end
+
 type error_message =
   [ `Msg of string
   | `Type_mismatch of term * term
   | `VarNotFound of string
   ]
-
-val eval0 : Context.t -> term -> value
 
 val is_type : Context.t -> term -> (unit, [> error_message]) result
 
