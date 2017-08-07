@@ -1,13 +1,21 @@
 type 'a binder = B of string * 'a
 
 type term =
+  { term_loc  : Location.t
+  ; term_data : term_data
+  }
+
+and term_data =
   | Neutral of head * elims
 
-  | Lam of term binder
   | Set
+
   | Pi of term * term binder
+  | Lam of term binder
+
   | Sigma of term * term binder
   | Pair of term * term
+
   | Bool
   | True
   | False
@@ -30,17 +38,12 @@ type term =
      reification. *)
   | Irrel
 
-(*
-    G, x : A, x' : A', e : [x : A == x' : A'] |- M : [f x : B x == g x' : B' x']
-  -------------------------------------------------------------------------------
-            G |- funext M : [f : (x : A) -> B == g : (x : A') -> B']
-
-
-        -----------------------------------------------
-           G |- coh : [a : A = coerce(a,A,B,p) : B]
-*)
-
 and head =
+  { head_loc  : Location.t
+  ; head_data : head_data
+  }
+
+and head_data =
   | Bound  of int
   | Free   of string
   | Coerce of { coercee  : term
@@ -50,26 +53,39 @@ and head =
               }
 
 and elims =
+  { elims_loc  : Location.t
+  ; elims_data : elims_data
+  }
+
+and elims_data =
   | Nil
   | App     of elims * term
   | If      of elims * term binder * term * term
   | Project of elims * [`fst | `snd]
 
+let mk_elim elims_data =
+  { elims_data; elims_loc = Location.generated }
+let mk_term term_data =
+  { term_data; term_loc = Location.generated }
+let mk_head head_data =
+  { head_data; head_loc = Location.generated }
+
+
 module AlphaEquality = struct
 
-  let binder2 k (B (_,t1)) (B (_,t2)) =
+  let binder k (B (_, t1)) (B (_, t2)) =
     k t1 t2
 
-  let rec equal_term t1 t2 = match t1, t2 with
+  let rec equal_term t1 t2 = match t1.term_data, t2.term_data with
     | Neutral (h1, es1), Neutral (h2, es2) ->
        equal_head h1 h2 && equal_elims es1 es2
     | Lam t1, Lam t2 ->
-       binder2 equal_term t1 t2
+       binder equal_term t1 t2
     | Set, Set ->
        true
     | Pi (s1, t1), Pi (s2, t2)
     | Sigma (s1, t1), Sigma (s2, t2) ->
-       equal_term s1 s2 && binder2 equal_term t1 t2
+       equal_term s1 s2 && binder equal_term t1 t2
     | Pair (s1, t1), Pair (s2, t2) ->
        equal_term s1 s2 && equal_term t1 t2
     | Bool, Bool
@@ -87,7 +103,7 @@ module AlphaEquality = struct
     | Subst { ty_s;       ty_t;       tm_x;       tm_y;       tm_e },
       Subst { ty_s=ty_s'; ty_t=ty_t'; tm_x=tm_x'; tm_y=tm_y'; tm_e=tm_e' } ->
        equal_term ty_s ty_s' &&
-       binder2 equal_term ty_t ty_t' &&
+       binder equal_term ty_t ty_t' &&
        equal_term tm_x tm_x' &&
        equal_term tm_y tm_y' &&
        equal_term tm_e tm_e'
@@ -95,13 +111,13 @@ module AlphaEquality = struct
     | Coh,  Coh ->
        true
     | Funext e, Funext e' ->
-       binder2 (binder2 (binder2 equal_term)) e e'
+       binder (binder (binder equal_term)) e e'
     | Irrel, Irrel ->
        true
     | _, _ ->
        false
 
-  and equal_head h1 h2 = match h1, h2 with
+  and equal_head h1 h2 = match h1.head_data, h2.head_data with
     | Bound i, Bound j -> i = j
     | Free nm, Free nm' -> nm = nm'
     | Coerce { coercee; src_type; tgt_type; eq_proof },
@@ -114,7 +130,7 @@ module AlphaEquality = struct
     | _, _ ->
        false
 
-  and equal_elims e1 e2 = match e1, e2 with
+  and equal_elims e1 e2 = match e1.elims_data, e2.elims_data with
     | Nil, Nil ->
        true
     | App (es, t), App (es', t') ->
@@ -122,7 +138,7 @@ module AlphaEquality = struct
     | If (es, ty, tm_t, tm_f),
       If (es', ty', tm_t', tm_f') ->
        equal_elims es es' &&
-       binder2 equal_term ty ty' &&
+       binder equal_term ty ty' &&
        equal_term tm_t tm_t' &&
        equal_term tm_f tm_f'
     | Project (es, dir), Project (es', dir') ->
@@ -133,6 +149,14 @@ module AlphaEquality = struct
 end
 
 (**********************************************************************)
+module type EXTENDABLE_CONTEXT = sig
+  type t
+
+  type value
+
+  val extend : string -> value -> t -> string * t
+end
+
 module Scoping : sig
   val bind : string -> term -> term binder
 
@@ -140,71 +164,110 @@ module Scoping : sig
 
   val bind_anon : term -> term binder
 
-  val close : string -> term binder -> term
+  module Close (Ctxt : EXTENDABLE_CONTEXT) : sig
+    val close : Ctxt.value -> term binder -> Ctxt.t -> string * term * Ctxt.t
 
-  val close3 : string -> string -> string -> term binder binder binder -> term
+    val close3 :
+      Ctxt.value ->
+      (string -> Ctxt.value) ->
+      (string -> string -> Ctxt.value) ->
+      term binder binder binder ->
+      Ctxt.t ->
+      string * string * string * term * Ctxt.t
+  end
 end = struct
   let binder k j = function
     | B (nm, t) -> B (nm, k (j+1) t)
 
   let traverse ~free ~bound j tm =
     let rec traverse_term j = function
-      | Neutral (head, elims) ->
-         Neutral (traverse_head j head, traverse_elims j elims)
-      | Lam t ->
-         Lam (binder traverse_term j t)
-      | Set ->
-         Set
-      | Pi (s, t) ->
-         Pi (traverse_term j s, binder traverse_term j t)
-      | Sigma (s, t) ->
-         Sigma (traverse_term j s, binder traverse_term j t)
-      | Pair (t1, t2) ->
-         Pair (traverse_term j t1, traverse_term j t2)
-      | TyEq (s, t) ->
-         TyEq (traverse_term j s, traverse_term j t)
-      | TmEq {tm1;ty1;tm2;ty2} ->
-         TmEq { tm1 = traverse_term j tm1
-              ; ty1 = traverse_term j ty1
-              ; tm2 = traverse_term j tm2
-              ; ty2 = traverse_term j ty2
-              }
-      | (Bool | True | False) as t -> t
-      | Subst { ty_s; ty_t; tm_x; tm_y; tm_e } ->
-         Subst { ty_s = traverse_term j ty_s
-               ; ty_t = binder traverse_term j ty_t
-               ; tm_x = traverse_term j tm_x
-               ; tm_y = traverse_term j tm_y
-               ; tm_e = traverse_term j tm_e
-               }
-      | (Refl | Coh) as t -> t
-      | Funext tm ->
-         Funext (binder (binder (binder traverse_term)) j tm)
-      | Irrel ->
+      | {term_data=Neutral (head, elims)} as tm ->
+         { tm with
+             term_data = Neutral (traverse_head j head, traverse_elims j elims)
+         }
+      | {term_data = Lam t} as tm ->
+         { tm with
+             term_data = Lam (binder traverse_term j t)
+         }
+      | {term_data = Set} as tm ->
+         tm
+      | {term_data = Pi (s, t)} as tm ->
+         { tm with
+             term_data = Pi (traverse_term j s, binder traverse_term j t)
+         }
+      | {term_data = Sigma (s, t)} as tm ->
+         { tm with
+             term_data = Sigma (traverse_term j s, binder traverse_term j t)
+         }
+      | {term_data = Pair (t1, t2)} as tm ->
+         { tm with
+             term_data =  Pair (traverse_term j t1, traverse_term j t2)
+         }
+      | {term_data = TyEq (s, t)} as tm ->
+         { tm with
+             term_data = TyEq (traverse_term j s, traverse_term j t)
+         }
+      | {term_data = TmEq {tm1;ty1;tm2;ty2}} as tm ->
+         { tm with
+             term_data = TmEq { tm1 = traverse_term j tm1
+                              ; ty1 = traverse_term j ty1
+                              ; tm2 = traverse_term j tm2
+                              ; ty2 = traverse_term j ty2
+                              }
+         }
+      | {term_data = Bool | True | False} as tm ->
+         tm
+      | {term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }} as tm ->
+         { tm with
+             term_data = Subst { ty_s = traverse_term j ty_s
+                               ; ty_t = binder traverse_term j ty_t
+                               ; tm_x = traverse_term j tm_x
+                               ; tm_y = traverse_term j tm_y
+                               ; tm_e = traverse_term j tm_e
+                               }
+         }
+      | {term_data = Refl | Coh} as tm ->
+         tm
+      | {term_data = Funext prf} as tm ->
+         { tm with
+             term_data = Funext (binder (binder (binder traverse_term)) j prf)
+         }
+      | {term_data = Irrel} ->
          failwith "internal error: attempt to bind in an erased proof term"
 
     and traverse_head j = function
-      | Bound i -> bound i j
-      | Free nm -> free nm j
-      | Coerce { coercee; src_type; tgt_type; eq_proof } ->
-         Coerce { coercee  = traverse_term j coercee
-                ; src_type = traverse_term j src_type
-                ; tgt_type = traverse_term j tgt_type
-                ; eq_proof = traverse_term j eq_proof
-                }
+      | { head_data = Bound i } as h ->
+         { h with head_data = bound i j }
+      | { head_data = Free nm } as h ->
+         { h with head_data = free nm j }
+      | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } as h ->
+         { h with
+              head_data = 
+                Coerce { coercee  = traverse_term j coercee
+                       ; src_type = traverse_term j src_type
+                       ; tgt_type = traverse_term j tgt_type
+                       ; eq_proof = traverse_term j eq_proof
+                       }
+         }
 
     and traverse_elims j = function
-      | Nil ->
-         Nil
-      | App (elims, tm) ->
-         App (traverse_elims j elims, traverse_term j tm)
-      | If (elims, ty, tm_t, tm_f) ->
-         If (traverse_elims j elims,
-             binder traverse_term j ty,
-             traverse_term j tm_t,
-             traverse_term j tm_f)
-      | Project (elims, component) ->
-         Project (traverse_elims j elims, component)
+      | { elims_data = Nil } as es ->
+         { es with elims_data = Nil }
+      | { elims_data = App (elims, tm) } as es ->
+         { es with
+             elims_data = App (traverse_elims j elims, traverse_term j tm)
+         }
+      | { elims_data = If (elims, ty, tm_t, tm_f) } as es ->
+         { es with
+             elims_data = If (traverse_elims j elims,
+                              binder traverse_term j ty,
+                              traverse_term j tm_t,
+                              traverse_term j tm_f)
+         }
+      | { elims_data = Project (elims, component) } as es ->
+         { es with
+             elims_data = Project (traverse_elims j elims, component)
+         }
     in
     traverse_term j tm
 
@@ -230,13 +293,18 @@ end = struct
   let bind_anon t =
     B ("x", t)
 
-  let close nm (B (_nm, tm)) =
-    (* FIXME: choose the fresh name here, using the binder provided
-       one as a hint. *)
-    close_term nm 0 tm
+  module Close (Ctxt : EXTENDABLE_CONTEXT) = struct
+    let close v (B (nm, tm)) ctxt =
+      let nm, ctxt = Ctxt.extend nm v ctxt in
+      nm, close_term nm 0 tm, ctxt
 
-  let close3 nm1 nm2 nm3 (B (_, B (_, B (_, t)))) =
-    close_term nm3 0 (close_term nm2 1 (close_term nm1 2 t))
+    let close3 v1 v2 v3 (B (nm1, B (nm2, B (nm3, t)))) ctxt =
+      let nm1, ctxt = Ctxt.extend nm1 v1 ctxt in
+      let nm2, ctxt = Ctxt.extend nm2 (v2 nm1) ctxt in
+      let nm3, ctxt = Ctxt.extend nm3 (v3 nm1 nm2) ctxt in
+      nm1, nm2, nm3, close_term nm3 0 (close_term nm2 1 (close_term nm1 2 t)), ctxt
+  end
+
 end
 
 (******************************************************************************)
@@ -328,21 +396,21 @@ let free x ty =
 
 let rec reify_type v i = match v with
   | V_Pi (s, VB (x, t)) ->
-     Pi (reify_type s i, B (x, reify_type (t (var s i)) (i+1)))
+     mk_term (Pi (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
   | V_Sigma (s, VB (x, t)) ->
-     Sigma (reify_type s i, B (x, reify_type (t (var s i)) (i+1)))
+     mk_term (Sigma (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
   | V_Set ->
-     Set
+     mk_term Set
   | V_Bool ->
-     Bool
+     mk_term Bool
   | V_TyEq (s, t) ->
-     TyEq (reify_type s i, reify_type t i)
+     mk_term (TyEq (reify_type s i, reify_type t i))
   | V_TmEq {s; s_ty; t; t_ty} ->
-     TmEq { tm1 = reify s_ty s i
-          ; ty1 = reify_type s_ty i
-          ; tm2 = reify t_ty t i
-          ; ty2 = reify_type t_ty i
-          }
+     mk_term (TmEq { tm1 = reify s_ty s i
+                   ; ty1 = reify_type s_ty i
+                   ; tm2 = reify t_ty t i
+                   ; ty2 = reify_type t_ty i
+                   })
   | V_Neutral (h, es) ->
      reify_neutral h es i
   | _ ->
@@ -350,26 +418,36 @@ let rec reify_type v i = match v with
 
 and reify ty v i = match ty, v with
   | V_Pi (s, VB (_, t)), V_Lam (VB (x, body)) ->
-     let v = var s i in Lam (B (x, reify (t v) (body v) (i+1)))
+     let v = var s i in
+     mk_term (Lam (B (x, reify (t v) (body v) (i+1))))
   | V_Pi (s, VB (x, t)), f ->
-     let v = var s i in Lam (B (x, reify (t v) (apply f v) (i+1)))
+     let v = var s i in
+     mk_term (Lam (B (x, reify (t v) (apply f v) (i+1))))
   | V_Sigma (s, VB (_, t)), p ->
-     Pair (reify s (vfst p) i, reify (t (vfst p)) (vsnd p) i)
-  | V_TyEq _, v       -> Irrel
-  | V_TmEq _, v       -> Irrel
-  | V_Bool,   V_True  -> True
-  | V_Bool,   V_False -> False
-  | V_Set,    v       -> reify_type v i
-  | _,        V_Neutral (h, es) -> reify_neutral h es i
-  | _                 -> failwith "internal error: reification failed"
+     mk_term (Pair (reify s (vfst p) i, reify (t (vfst p)) (vsnd p) i))
+  | V_TyEq _, v
+  | V_TmEq _, v       ->
+     mk_term Irrel
+  | V_Bool,   V_True  ->
+     mk_term True
+  | V_Bool,   V_False ->
+     mk_term False
+  | V_Set,    v ->
+     reify_type v i
+  | _, V_Neutral (h, es) ->
+     reify_neutral h es i
+  | _ ->
+     failwith "internal error: reification failed"
 
-and reify_neutral h es i = match h with
+and reify_neutral h es i : term = match h with
   | H_Var { shift; typ } ->
      let es, _ = reify_elims h typ es i in
-     Neutral (Bound (i-shift-1), es)
+     let h     = mk_head (Bound (i-shift-1)) in
+     mk_term (Neutral (h, es))
   | H_Free { name; typ } ->
      let es, _ = reify_elims h typ es i in
-     Neutral (Free name, es)
+     let h     = mk_head (Free name) in
+     mk_term (Neutral (h, es))
   | H_Coe { coercee; src_type; tgt_type } ->
      let ty1_tm = reify_type src_type i in
      let ty2_tm = reify_type tgt_type i in
@@ -377,37 +455,38 @@ and reify_neutral h es i = match h with
        reify src_type (eval_elims coercee es) i
      else
        let es, _ = reify_elims h tgt_type es i in
-       Neutral (Coerce { coercee  = reify src_type coercee i
-                       ; src_type = ty1_tm
-                       ; tgt_type = ty2_tm
-                       ; eq_proof = Irrel
-                       }, es)
+       let h = mk_head (Coerce { coercee  = reify src_type coercee i
+                               ; src_type = ty1_tm
+                               ; tgt_type = ty2_tm
+                               ; eq_proof = mk_term Irrel })
+       in
+       mk_term (Neutral (h, es))
 
 and reify_elims h ty es i = match es with
   | E_Nil ->
-     Nil, ty
+     mk_elim Nil, ty
   | E_App (es, v) ->
      (match reify_elims h ty es i with
        | es, V_Pi (s, VB (_, t)) ->
-          App (es, reify s v i), t v
+          mk_elim (App (es, reify s v i)), t v
        | _ ->
           failwith "internal error: type error reifying application")
   | E_If (es, VB (x, elim_ty), v_t, v_f) ->
      (match reify_elims h ty es i with
        | es', V_Bool ->
-          If (es',
-              B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
-              reify (elim_ty V_True) v_t i,
-              reify (elim_ty V_False) v_f i),
+          mk_elim (If (es',
+                       B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
+                       reify (elim_ty V_True) v_t i,
+                       reify (elim_ty V_False) v_f i)),
           elim_ty (V_Neutral (h, es))
        | _ ->
           failwith "internal error: type error reifying bool case switch")
   | E_Project (es, component) ->
      (match reify_elims h ty es i, component with
        | (reified_es, V_Sigma (s, _)), `fst ->
-          Project (reified_es, `fst), s
+          mk_elim (Project (reified_es, `fst)), s
        | (reified_es, V_Sigma (s, VB (_, t))), `snd ->
-          Project (reified_es, `snd), t (V_Neutral (h, es))
+          mk_elim (Project (reified_es, `snd)), t (V_Neutral (h, es))
        | _ ->
           failwith "internal error: type error reifying a projection")
 
@@ -430,10 +509,16 @@ let equal_terms tm1 tm2 ty =
 module Context : sig
   type t
 
+  type nonrec value = value
+  
   val empty : t
-  val extend : t -> value -> string * t
+
+  val extend : string -> value -> t -> string * t
+
   val lookup : string -> t -> (value, [>`VarNotFound of string]) result
+
   val lookup_exn : string -> t -> value * value option
+
   val extend_with_defn : string -> ty:value -> tm:value -> t -> t
 end = struct
   module VarMap = Map.Make(String)
@@ -442,18 +527,20 @@ end = struct
     { entry_type : value
     ; entry_defn : value option
     }
-  
+
   type t =
     { next_var : int
     ; entries  : entry VarMap.t
     }
 
+  type nonrec value = value
+  
   let empty =
     { next_var = 0; entries = VarMap.empty }
 
   (* FIXME: what if we extend with a name that is already free in the
      term? *)
-  let extend ctxt value =
+  let extend _varnm value ctxt =
     let var = "_x"^string_of_int ctxt.next_var in
     let entry = { entry_type = value; entry_defn = None } in
     var,
@@ -509,7 +596,7 @@ end = struct
     VB (nm, fun v -> k tm (v::env))
 
   let evaluate ctxt tm =
-    let rec eval tm env = match tm with
+    let rec eval tm env = match tm.term_data with
       | Neutral (h, es) -> eval_elims (eval_head h env) es env
       | Lam t           -> V_Lam (binder eval t env)
       | Set             -> V_Set
@@ -530,7 +617,7 @@ end = struct
       | Subst _ | Coh | Funext _ | Refl | Irrel ->
          V_Irrel
 
-    and eval_head h env = match h with
+    and eval_head h env = match h.head_data with
       | Bound i -> List.nth env i (* FIXME: something better than lists? *)
       | Free nm ->
          (match Context.lookup_exn nm ctxt with
@@ -541,7 +628,7 @@ end = struct
       | Coerce { coercee; src_type; tgt_type } ->
          coerce (eval coercee env) (eval src_type env) (eval tgt_type env)
 
-    and eval_elims scrutinee elims env = match elims with
+    and eval_elims scrutinee elims env = match elims.elims_data with
       | Nil ->
          scrutinee
       | App (elims, tm) ->
@@ -561,170 +648,182 @@ end = struct
     in
     eval tm
 
-  let eval0 ctxt tm = evaluate ctxt tm []
-  let eval1 ctxt (B (_, tm)) v = evaluate ctxt tm [v]
+  let eval0 ctxt tm =
+    evaluate ctxt tm []
+
+  let eval1 ctxt (B (_, tm)) v =
+    evaluate ctxt tm [v]
 end
   
 (******************************************************************************)
 type error_message =
-  [ `Msg of string
-  | `Type_mismatch of term * term
-  | `VarNotFound of string
+  [ `Type_mismatch of Location.t * term * term
+  | `VarNotFound of Location.t * string
+  | `MsgLoc of Location.t * string
   ]
 
+module ScopeClose = Scoping.Close (Context)
+
+let (>>=) result f = match result with
+  | Ok x           -> f x
+  | Error msg as x -> x
+
 let rec is_type ctxt = function
-  | Set ->
+  | { term_data = Set } ->
      Ok ()
-  | Bool ->
+
+  | { term_data = Bool } ->
      Ok ()
-  | Pi (s, t) ->
-     (match is_type ctxt s with
-       | Ok () ->
-          let x, ctxt = Context.extend ctxt (Evaluation.eval0 ctxt s) in
-          is_type ctxt (Scoping.close x t)
-       | Error msg ->
-          Error msg)
-  | Sigma (s, t) ->
-     (match is_type ctxt s with
-       | Ok () ->
-          let x, ctxt = Context.extend ctxt (Evaluation.eval0 ctxt s) in
-          is_type ctxt (Scoping.close x t)
-       | Error msg ->
-          Error msg)
-  | TyEq (s, t) ->
-     (match is_type ctxt s with
-       | Ok ()     -> is_type ctxt t
-       | Error msg -> Error msg)
-  | TmEq {tm1; ty1; tm2; ty2} ->
-     (match is_type ctxt ty1, is_type ctxt ty2 with
-       | Ok (), Ok () ->
-          let ty1 = Evaluation.eval0 ctxt ty1 in
-          let ty2 = Evaluation.eval0 ctxt ty2 in
-          (match has_type ctxt ty1 tm1, has_type ctxt ty2 tm2 with
-            | Ok (), Ok () ->
-               Ok ()
-            | Error msg, _ ->
-               Error msg
-            | _, Error msg ->
-               Error msg)
-       | Error msg, _ ->
-          Error msg
-       | Ok _, Error msg ->
-          Error msg)
-  (* FIXME: only remaining possibility is Neutral: synthesise the type
-     and check that it is Set for some set level. This would allow a
-     hierarchy of Sets. *)
-  | tm ->
-     has_type ctxt V_Set tm
+
+  | { term_data = Pi (s, t) } ->
+     is_type ctxt s >>= fun () ->
+     let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
+     is_type ctxt t
+
+  | { term_data = Sigma (s, t) } ->
+     is_type ctxt s >>= fun () ->
+     let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
+     is_type ctxt t
+
+  | { term_data = TyEq (s, t) } ->
+     is_type ctxt s >>= fun () ->
+     is_type ctxt t
+
+  | { term_data = TmEq {tm1; ty1; tm2; ty2} } ->
+     is_type ctxt ty1 >>= fun () ->
+     is_type ctxt ty2 >>= fun () ->
+     let ty1 = Evaluation.eval0 ctxt ty1 in
+     let ty2 = Evaluation.eval0 ctxt ty2 in
+     has_type ctxt ty1 tm1 >>= fun () ->
+     has_type ctxt ty2 tm2 >>= fun () ->
+     Ok ()
+
+  | { term_data = Neutral (h, es); term_loc } ->
+     (synthesise_elims_type ctxt h es >>= function
+       | V_Set ->
+          Ok ()
+       | _ ->
+          Error (`MsgLoc (term_loc, "expecting a value of type 'Set'")))
+
+  | { term_loc } ->
+     Error (`MsgLoc (term_loc, "Not a type"))
 
 and has_type ctxt ty tm = match ty, tm with
-  | V_Pi (s, VB (_, t)), Lam tm ->
-     let x, ctxt = Context.extend ctxt s in
-     has_type ctxt (t (free x s)) (Scoping.close x tm)
-  | V_Sigma (s, VB (_, t)), Pair (tm_s, tm_t) ->
-     (match has_type ctxt s tm_s with
-       | Ok () ->
-          let tm_s = Evaluation.eval0 ctxt tm_s in
-          has_type ctxt (t tm_s) tm_t
-       | Error msg ->
-          Error msg)
-  | V_Set, Bool ->
-     Ok ()
-  | V_Set, Pi (s, t) ->
-     (match has_type ctxt V_Set s with
-       | Ok () ->
-          let x, ctxt = Context.extend ctxt (Evaluation.eval0 ctxt s) in
-          has_type ctxt V_Set (Scoping.close x t)
-       | Error msg ->
-          Error msg)
-  | V_Set, Sigma (s, t) ->
-     (match has_type ctxt V_Set s with
-       | Ok () ->
-          let x, ctxt = Context.extend ctxt (Evaluation.eval0 ctxt s) in
-          has_type ctxt V_Set (Scoping.close x t)
-       | Error msg ->
-          Error msg)
-  | V_Set, TyEq (s, t) ->
-     (match is_type ctxt s with
-       | Ok ()     -> is_type ctxt t
-       | Error msg -> Error msg)
-  | V_Set, TmEq {tm1; ty1; tm2; ty2} ->
-     (match is_type ctxt ty1, is_type ctxt ty2 with
-       | Ok (), Ok () ->
-          let ty1 = Evaluation.eval0 ctxt ty1 in
-          let ty2 = Evaluation.eval0 ctxt ty2 in
-          (match has_type ctxt ty1 tm1, has_type ctxt ty2 tm2 with
-            | Ok (), Ok () ->
-               Ok ()
-            | _ ->
-               Error (`Msg "term(s) not of right type in term equality"))
-       | Error msg, _ ->
-          Error msg
-       | Ok _, Error msg ->
-          Error msg)
+  | ty, { term_data = Neutral (h, elims); term_loc } ->
+     synthesise_elims_type ctxt h elims >>= fun ty' ->
+     let ty = reify_type ty 0 in
+     let ty' = reify_type ty' 0 in
+     if AlphaEquality.equal_term ty ty' then
+       Ok ()
+     else
+       Error (`Type_mismatch (term_loc, ty, ty'))
 
-  | V_Bool, (True | False) ->
+  | V_Pi (s, VB (_, t)), { term_data = Lam tm } ->
+     let x, tm, ctxt = ScopeClose.close s tm ctxt in
+     has_type ctxt (t (free x s)) tm
+
+  | V_Pi _, { term_loc } ->
+     Error (`MsgLoc (term_loc, "This term is expected to be a function, but isn't"))
+
+  | V_Sigma (s, VB (_, t)), { term_data = Pair (tm_s, tm_t) } ->
+     has_type ctxt s tm_s >>= fun () ->
+     let tm_s = Evaluation.eval0 ctxt tm_s in
+     has_type ctxt (t tm_s) tm_t
+
+  | V_Sigma _, { term_loc } ->
+     Error (`MsgLoc (term_loc, "This term is expected to be a pair, but isn't"))
+
+  | V_Set, { term_data = Bool } ->
      Ok ()
 
-  | V_TyEq (ty1, ty2), Subst { ty_s; ty_t; tm_x; tm_y; tm_e } ->
-     (match is_type ctxt ty_s with
-       | Ok () ->
-          (let ty_s = Evaluation.eval0 ctxt ty_s in
-           match
-             let x, ctxt = Context.extend ctxt ty_s in
-             is_type ctxt (Scoping.close x ty_t)
-           with
-             | Ok () ->
-                (let ty_t = Evaluation.eval1 ctxt ty_t in
-                 match has_type ctxt ty_s tm_x, has_type ctxt ty_s tm_y with
-                   | Ok (), Ok () ->
-                      (let tm_x = Evaluation.eval0 ctxt tm_x in
-                       let tm_y = Evaluation.eval0 ctxt tm_y in
-                       let ty   =
-                         V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s }
-                       in
-                       match has_type ctxt ty tm_e with
-                         | Ok () ->
-                            if (equal_types (ty_t tm_x) ty1
-                                && equal_types (ty_t tm_y) ty2)
-                            then
-                              Ok ()
-                            else
-                              Error (`Msg "type mismtach in subst")
-                         | Error msg ->
-                            Error msg)
-                   | _ ->
-                      Error (`Msg "problem in checking left and right bits of subst"))
-             | Error msg ->
-                Error msg)
-       | Error msg ->
-          Error msg)
+  | V_Set, { term_data = Pi (s, t) } ->
+     has_type ctxt V_Set s >>= fun () ->
+     let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
+     has_type ctxt V_Set t
 
-  | V_TyEq (ty1, ty2), Refl ->
+  | V_Set, { term_data = Sigma (s, t) } ->
+     has_type ctxt V_Set s >>= fun () ->
+     let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
+     has_type ctxt V_Set t
+
+  | V_Set, { term_data = TyEq (s, t) } ->
+     is_type ctxt s >>= fun () ->
+     is_type ctxt t
+
+  | V_Set, { term_data = TmEq {tm1; ty1; tm2; ty2} } ->
+     is_type ctxt ty1 >>= fun () ->
+     is_type ctxt ty2 >>= fun () ->
+     let ty1 = Evaluation.eval0 ctxt ty1 in
+     let ty2 = Evaluation.eval0 ctxt ty2 in
+     has_type ctxt ty1 tm1 >>= fun () ->
+     has_type ctxt ty2 tm2
+
+  | V_Set, { term_loc } ->
+     Error (`MsgLoc (term_loc, "This term is expected to be a code for a type, but isn't"))
+
+  | V_Bool, { term_data = True | False } ->
+     Ok ()
+
+  | V_Bool, { term_loc } ->
+     Error (`MsgLoc (term_loc, "This term is expected to be a boolean, but isn't"))
+
+  | V_TyEq (ty1, ty2),
+    { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }; term_loc } ->
+     is_type ctxt ty_s >>= fun () ->
+     let ty_s = Evaluation.eval0 ctxt ty_s in
+     (let _, ty_t, ctxt = ScopeClose.close ty_s ty_t ctxt in is_type ctxt ty_t) >>= fun () ->
+     let ty_t = Evaluation.eval1 ctxt ty_t in
+     has_type ctxt ty_s tm_x >>= fun () ->
+     has_type ctxt ty_s tm_y >>= fun () ->
+     let tm_x = Evaluation.eval0 ctxt tm_x in
+     let tm_y = Evaluation.eval0 ctxt tm_y in
+     let ty   =
+       V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s }
+     in
+     has_type ctxt ty tm_e >>= fun () ->
+     if equal_types (ty_t tm_x) ty1 && equal_types (ty_t tm_y) ty2 then
+       Ok ()
+     else
+       Error (`MsgLoc (term_loc, "type mismatch in subst"))
+
+  | V_TyEq (ty1, ty2),
+    { term_data = Refl; term_loc } ->
      if equal_types ty1 ty2 then
        Ok ()
      else
-       Error (`Msg "types not equal in refl")
+       Error (`MsgLoc (term_loc, "types not equal in refl"))
 
-  | V_TmEq { s; s_ty; t; t_ty }, Refl ->
+  | V_TyEq _, { term_loc } ->
+     Error (`MsgLoc (term_loc, "This term is expected to be a type equality, but isn't"))
+
+  | V_TmEq { s; s_ty; t; t_ty }, { term_data = Refl; term_loc } ->
+     (* FIXME: "Using 'Refl' as a proof of the equality 'XXX' failed
+        because the types are not equal/terms are not judgementally
+        equal." *)
      if equal_types s_ty t_ty then
        (if equal_terms s t s_ty then
           Ok ()
         else
-          Error (`Msg "terms not equal in refl"))
+          Error (`MsgLoc (term_loc, "terms not equal in refl")))
      else
-       Error (`Msg "types not equal in refl")
+       Error (`MsgLoc (term_loc, "types not equal in refl"))
 
   | V_TmEq { s=tm_f1; s_ty=V_Pi (s1, VB (_, t1))
            ; t=tm_f2; t_ty=V_Pi (s2, VB (_, t2))},
-    Funext proof ->
-     let x1, ctxt = Context.extend ctxt s1 in
-     let x1v      = free x1 s1 in
-     let x2, ctxt = Context.extend ctxt s2 in
-     let x2v      = free x2 s2 in
-     let xe, ctxt =
-       Context.extend ctxt (V_TmEq {s=x1v; s_ty=s2; t=x2v; t_ty=s2}) in
-     let proof    = Scoping.close3 x1 x2 xe proof in
+    { term_data = Funext proof } ->
+     let x1, x2, _, proof, ctxt =
+       ScopeClose.close3
+         s1
+         (fun _ -> s2)
+         (fun x1 x2 ->
+            let x1v = free x1 s1 in
+            let x2v = free x2 s2 in
+            V_TmEq {s=x1v; s_ty=s2; t=x2v; t_ty=s2})
+         proof
+         ctxt
+     in
+     let x1v = free x1 s1 in
+     let x2v = free x2 s2 in
      let reqd_ty  =
        V_TmEq { s    = apply tm_f1 x1v
               ; s_ty = t1 x1v
@@ -734,116 +833,89 @@ and has_type ctxt ty tm = match ty, tm with
      in
      has_type ctxt reqd_ty proof
 
-  | V_TmEq {s; s_ty; t; t_ty}, Coh ->
+  | V_TmEq {s; s_ty; t; t_ty}, { term_data = Coh; term_loc } ->
      let t' =
        V_Neutral (H_Coe { coercee = s; src_type = s_ty; tgt_type = t_ty }, E_Nil)
      in
      if equal_terms t t' t_ty then
        Ok ()
      else
-       Error (`Msg "invalid coh")
+       Error (`MsgLoc (term_loc, "invalid Coh"))
 
-  | ty, Neutral (h, elims) ->
-     (match synthesise_elims_type ctxt h elims with
-       | Ok ty' ->
-          let ty = reify_type ty 0 in
-          let ty' = reify_type ty' 0 in
-          if AlphaEquality.equal_term ty ty'
-          then Ok ()
-          else Error (`Type_mismatch (ty, ty'))
-       | Error msg ->
-          Error msg)
+  | V_TmEq _, { term_loc } ->
+     Error (`MsgLoc (term_loc, "This term is expected to be a term equality, but isn't"))
 
-  | ty, tm ->
-     Error (`Msg "type error: pushed in type does not match term")
+  | (V_True | V_False | V_Lam _ | V_Pair _ | V_Irrel | V_Neutral _), _ ->
+     failwith "internal error: has_type: attempting to check canonical term aganst non canonical type"
 
 and synthesise_head_type ctxt = function
-  | Bound _ ->
+  | { head_data = Bound _ } ->
      failwith "internal error: bound variable has got free"
 
-  | Free nm ->
-     Context.lookup nm ctxt
+  | { head_data = Free nm; head_loc } ->
+     (match Context.lookup nm ctxt with
+       | Ok ty ->
+          Ok ty
+       | Error (`VarNotFound nm) ->
+          Error (`VarNotFound (head_loc, nm)))
 
-  | Coerce { coercee; src_type; tgt_type; eq_proof } ->
-     match is_type ctxt src_type, is_type ctxt tgt_type with
-       | Ok (), Ok () ->
-          let ty1 = Evaluation.eval0 ctxt src_type in
-          let ty2 = Evaluation.eval0 ctxt tgt_type in
-          (match has_type ctxt ty1 coercee,
-                 has_type ctxt (V_TyEq (ty1, ty2)) eq_proof with
-            | Ok (), Ok () ->
-               Ok ty2
-            | Error msg, _ ->
-               Error msg
-            | _, Error msg ->
-               Error msg)
-       | Error msg, _ ->
-          Error msg
-       | Ok (), Error msg ->
-          Error msg
+  | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } ->
+     is_type ctxt src_type >>= fun () ->
+     is_type ctxt tgt_type >>= fun () ->
+     let ty1 = Evaluation.eval0 ctxt src_type in
+     let ty2 = Evaluation.eval0 ctxt tgt_type in
+     has_type ctxt ty1 coercee >>= fun () ->
+     has_type ctxt (V_TyEq (ty1, ty2)) eq_proof >>= fun () ->
+     Ok ty2
 
 and synthesise_elims_type ctxt h = function
-  | Nil ->
+  | { elims_data = Nil } ->
      synthesise_head_type ctxt h
 
-  | App (elims, tm) ->
-     (match synthesise_elims_type ctxt h elims with
-       | Ok (V_Pi (s, VB (_, t))) ->
-          (match has_type ctxt s tm with
-            | Ok ()   -> Ok (t (Evaluation.eval0 ctxt tm))
-            | Error e -> Error e)
-       | Ok _    ->
-          Error (`Msg "attempt to apply non function")
-       | Error e ->
-          Error e)
+  | { elims_data = App (elims, tm); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= function
+       | V_Pi (s, VB (_, t)) ->
+          has_type ctxt s tm >>= fun () ->
+          Ok (t (Evaluation.eval0 ctxt tm))
+       | _ ->
+          (* error: attenpt to apply 'elims' to 'tm', but elims has
+             type 'bloo' and cannot be used as a function. *)
+          Error (`MsgLoc (elims_loc, "attempt to apply non function")))
 
-  | If (elims, elim_ty, tm_t, tm_f) ->
-     (match synthesise_elims_type ctxt h elims with
-       | Ok V_Bool ->
-          (match
-             let x, ctxt = Context.extend ctxt V_Bool in
-             is_type ctxt (Scoping.close x elim_ty)
-           with
-             | Ok () ->
-                let ty = Evaluation.eval1 ctxt elim_ty in
-                (match (has_type ctxt (ty V_True) tm_t,
-                        has_type ctxt (ty V_False) tm_f) with
-                  | Ok (), Ok () ->
-                     Ok (ty (Evaluation.eval0 ctxt (Neutral (h, elims))))
-                  | _ ->
-                     Error (`Msg "error in branches of if"))
-             | Error msg ->
-                Error msg)
-       | Ok _ ->
-          Error (`Msg "attempt to eliminate non boolean")
-       | Error msg ->
-          Error msg)
+  | { elims_data = If (elims, elim_ty, tm_t, tm_f); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= function
+       | V_Bool ->
+          (let _, elim_ty, ctxt = ScopeClose.close V_Bool elim_ty ctxt in
+           is_type ctxt elim_ty)
+          >>= fun () ->
+          let ty = Evaluation.eval1 ctxt elim_ty in
+          has_type ctxt (ty V_True) tm_t >>= fun () ->
+          has_type ctxt (ty V_False) tm_f >>= fun () ->
+          Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+       | _ ->
+          Error (`MsgLoc (elims_loc, "attempt to eliminate non boolean")))
 
-  | Project (elims, `fst) ->
-     (match synthesise_elims_type ctxt h elims with
-       | Ok (V_Sigma (s, t)) ->
+  | { elims_data = Project (elims, `fst); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= function
+       | V_Sigma (s, t) ->
           Ok s
-       | Ok (V_TyEq (V_Pi (s,t), V_Pi (s',t'))) ->
+       | V_TyEq (V_Pi (s,t), V_Pi (s',t')) ->
           Ok (V_TyEq (s',s))
-       | Ok (V_TyEq (V_Sigma (s,t), V_Sigma (s',t'))) ->
+       | V_TyEq (V_Sigma (s,t), V_Sigma (s',t')) ->
           Ok (V_TyEq (s,s'))
-       | Ok _ ->
-          Error (`Msg "attempt to project from expression of non pair type")
-       | Error msg ->
-          Error msg)
+       | _ ->
+          Error (`MsgLoc (elims_loc, "attempt to project from expression of non pair type")))
 
-  | Project (elims, `snd) ->
-     (match synthesise_elims_type ctxt h elims with
-       | Ok (V_Sigma (s, VB (_, t))) ->
-          Ok (t (Evaluation.eval0 ctxt (Neutral (h, elims))))
-       | Ok (V_TyEq (V_Pi (s, VB (x, t)), V_Pi (s', VB (x', t'))))
-       | Ok (V_TyEq (V_Sigma (s, VB (x, t)), V_Sigma (s', VB (x', t')))) ->
+  | { elims_data = Project (elims, `snd); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= function
+       | V_Sigma (s, VB (_, t)) ->
+          Ok (t (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+       | V_TyEq (V_Pi (s, VB (x, t)), V_Pi (s', VB (x', t')))
+       | V_TyEq (V_Sigma (s, VB (x, t)), V_Sigma (s', VB (x', t'))) ->
           Ok (V_Pi (s, VB (x, fun vs ->
               V_Pi (s', VB (x', fun vs' ->
                   V_Pi (V_TmEq { s=vs; s_ty=s; t=vs'; t_ty=s' },
                         VB (x^"_"^x', fun _ ->
                             V_TyEq (t vs, t' vs'))))))))
-       | Ok _ ->
-          Error (`Msg "attempt to project from expression of non pair type")
-       | Error msg ->
-          Error msg)
+       | _ ->
+          Error (`MsgLoc (elims_loc, "attempt to project from expression of non pair type")))

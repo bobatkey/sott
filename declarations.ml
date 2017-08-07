@@ -7,10 +7,18 @@
 
 *)
 
-let string_of_msg = function
-  | `Msg msg         -> msg
-  | `Type_mismatch _ -> "type mismatch"
-  | `VarNotFound nm  -> Printf.sprintf "Variable '%s' not in scope" nm
+let pp_msg fmt = function
+  | `Type_mismatch (loc, ty1, ty2) ->
+     Format.fprintf fmt "type mismatch at %a"
+       Location.pp_without_filename loc
+  | `VarNotFound (loc, nm)  ->
+     Format.fprintf fmt "Variable '%s' not in scope at %a"
+       nm
+       Location.pp_without_filename loc
+  | `MsgLoc (loc, msg) ->
+     Format.fprintf fmt "%s at %a"
+       msg
+       Location.pp_without_filename loc
 
 let rec process_decls ctxt = function
   | [] ->
@@ -18,15 +26,17 @@ let rec process_decls ctxt = function
   | `Def (id, ty, tm)::decls ->
      (match Syntax.is_type ctxt ty with
        | Error msg ->
-          Printf.eprintf "ERR: Checking '%s''s type: %s\n%!"
-            id (string_of_msg msg);
+          Format.eprintf "ERR: Checking '%s''s type: %a\n%!"
+            id
+            pp_msg msg;
           Error ()
        | Ok () ->
           let ty = Syntax.Evaluation.eval0 ctxt ty in
           match Syntax.has_type ctxt ty tm with
             | Error msg ->
-               Printf.eprintf "ERR: Checking '%s' body: %s\n%!"
-                 id (string_of_msg msg);
+               Format.eprintf "ERR: Checking '%s' body: %a\n%!"
+                 id
+                 pp_msg msg;
                Error ()
             | Ok () ->
                let tm = Syntax.Evaluation.eval0 ctxt tm in

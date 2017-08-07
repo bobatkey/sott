@@ -2,13 +2,21 @@ type 'a binder =
   | B  of string * 'a
 
 type term =
+  { term_loc  : Location.t
+  ; term_data : term_data
+  }
+
+and term_data =
   | Neutral of head * elims
 
-  | Lam of term binder
   | Set
-  | Pi  of term * term binder
+
+  | Pi of term * term binder
+  | Lam of term binder
+
   | Sigma of term * term binder
   | Pair of term * term
+
   | Bool
   | True
   | False
@@ -16,7 +24,7 @@ type term =
   | TyEq of term * term
   | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
 
-  (* equality proof constructors *)
+  (* proof constructors *)
   | Subst of { ty_s : term
              ; ty_t : term binder
              ; tm_x : term
@@ -32,6 +40,11 @@ type term =
   | Irrel
 
 and head =
+  { head_loc  : Location.t
+  ; head_data : head_data
+  }
+
+and head_data =
   | Bound  of int
   | Free   of string
   | Coerce of { coercee  : term
@@ -41,14 +54,23 @@ and head =
               }
 
 and elims =
+  { elims_loc  : Location.t
+  ; elims_data : elims_data
+  }
+
+and elims_data =
   | Nil
-  | App of elims * term
-  | If  of elims * term binder * term * term
+  | App     of elims * term
+  | If      of elims * term binder * term * term
   | Project of elims * [`fst | `snd]
+
+
 
 module Scoping : sig
   val bind : string -> term -> term binder
+
   val bind3 : string -> string -> string -> term -> term binder binder binder
+
   val bind_anon : term -> term binder
 end
 
@@ -68,9 +90,9 @@ module Evaluation : sig
 end
 
 type error_message =
-  [ `Msg of string
-  | `Type_mismatch of term * term
-  | `VarNotFound of string
+  [ `Type_mismatch of Location.t * term * term
+  | `VarNotFound of Location.t * string
+  | `MsgLoc of Location.t * string
   ]
 
 val is_type : Context.t -> term -> (unit, [> error_message]) result

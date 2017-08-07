@@ -40,3 +40,7 @@ as (*coerce(True, F (\b -> and b False), F (\b -> False),
 define test :
   [hofmann : Bool = True : Bool]
 as refl
+
+define coh_test :
+  (e : [Bool = Bool])(b : Bool) -> [b : Bool = coerce(b,Bool,Bool,e) : Bool]
+as \e b -> coh
