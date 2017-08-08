@@ -17,13 +17,14 @@ as
 define symm :
   (A : Set)(x : A)(y : A)(p : [x : A = y : A]) -> [y : A = x : A]
 as
-  \A -> \x -> \y -> \p ->
+  \A x y p ->
      coerce(refl,[x : A = x : A],[y : A = x : A],subst(A,z.[z : A = x : A],x,y,p))
 
 define coh_test :
   (A : Set)(B : Set)(x : A)(p : [A = B]) -> [x : A = coerce(x,A,B,p) : B]
-as \A -> \B -> \x -> \p ->
-     coh
+as \A B x p -> coherence
+  (* introduce A B x p, conclude [x : A = coerce(x,A,B,p) : B] by coherence. *)
+
 
 (*
 define symm :

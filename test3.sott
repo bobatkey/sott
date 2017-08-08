@@ -1,6 +1,6 @@
 define sum :
   Set -> Set -> Set
-as \A B -> (x : Bool) * x by_cases for x. Set { True -> A; False -> B }
+as \A B -> (x : Bool) * (x by_cases for x. Set { True -> A; False -> B })
 
 define inl :
   (A:Set)(B:Set) -> A -> sum A B
