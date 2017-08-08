@@ -14,7 +14,7 @@ let mk loc_start loc_end =
              ; start_line   = loc_start.pos_lnum
              ; start_column = loc_start.pos_cnum - loc_start.pos_bol
              ; end_line     = loc_end.pos_lnum
-             ; end_column   = loc_end.pos_cnum - loc_end.pos_cnum
+             ; end_column   = loc_end.pos_cnum - loc_end.pos_bol
              }
 
 let mk_span loc1 loc2 = match loc1, loc2 with
