@@ -48,6 +48,7 @@ rule token = parse
 | eof       { EOF }
 
 and comment = parse
-| [^ '*' ]* "*)" { () }
-| [^ '*' ]* "(*" { comment lexbuf; comment lexbuf }
-| [^ '*' ]* "*"  { comment lexbuf }
+| [^ '*''\n' ]* "\n" { Lexing.new_line lexbuf; comment lexbuf }
+| [^ '*''\n' ]* "*)" { () }
+| [^ '*''\n' ]* "(*" { comment lexbuf; comment lexbuf }
+| [^ '*''\n' ]* "*"  { comment lexbuf }
