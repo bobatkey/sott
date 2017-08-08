@@ -14,6 +14,9 @@ and term_data =
   | Pi of term * term binder
   | Lam of term binder
 
+  | QuotType  of term * term
+  | QuotIntro of term
+
   | Sigma of term * term binder
   | Pair of term * term
 
@@ -36,8 +39,9 @@ and term_data =
              ; tm_e : term
              }
   | Refl
-  | Coh
+  | Coh of term
   | Funext of term binder binder binder
+  | SameClass of term
 
   (* placeholder for an erased proof term; only generated during
      reification. *)
@@ -69,7 +73,7 @@ and elims_data =
   | If      of elims * term binder * term * term
   | Project of elims * [`fst | `snd]
   | ElimNat of elims * term binder * term * term binder binder
-
+  | ElimQ   of elims * term binder * term binder * term binder binder binder
 
 
 module Scoping : sig

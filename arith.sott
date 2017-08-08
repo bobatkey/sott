@@ -1,11 +1,11 @@
-define two : Nat
-as Succ (Succ Zero)
-
 define add : Nat -> Nat -> Nat
 as \m n -> m #recursion for x. Nat
              { Zero     -> n
              ; Succ n p -> Succ p
              }
+
+define two : Nat
+as Succ (Succ Zero)
 
 define test :
   [add two two : Nat = Succ (Succ two) : Nat]
@@ -179,3 +179,104 @@ as \z1 z1' r1 z2 z2' r2 ->
        (* = *)  (add (add (z1'#fst) (z1#snd)) (add (z2'#fst) (z2#snd)))  (f_equal (\x -> add (add (z1'#fst) (z1#snd)) x) (add (z2#fst) (z2'#snd)) (add (z2'#fst) (z2#snd)) r2)
        (* = *)  (add (add (z1'#fst) (z2'#fst)) (add (z1#snd) (z2#snd)))  (interchange (z1'#fst) (z1#snd) (z2'#fst) (z2#snd))
 
+
+define Int : Set
+as Int_carrier / R
+
+define zero : Int
+as [zero_]
+
+define negate : Int -> Int
+as \z -> z #elimq for x. Int
+           { [z]      -> [negate_ z]
+           ; z1 z2 zr -> same-class (negate_lemma z1 z2 zr) }
+
+define add1 : Int_carrier -> Int -> Int
+as \z1 z2 -> z2#elimq for x. Int
+               { [z2] -> [add_ z1 z2]
+               ; z2 z2' r2 -> same-class (add_lemma z1 z1 refl z2 z2' r2)
+               }
+
+define lemma :
+  (z1:Int_carrier)(z1':Int_carrier)
+  (z2:Int_carrier)(z2':Int_carrier)(z2r:R z2 z2') ->
+  [ [ add1 z1 [z2] : Int = add1 z1' [z2] : Int]
+  = [ add1 z1 [z2'] : Int = add1 z1' [z2'] : Int ] ]
+as \z1 z1' z2 z2' z2r ->
+     subst(Int, x. [ add1 z1 x : Int = add1 z1' x : Int],
+           [z2], [z2'], same-class(z2r))
+
+
+
+define add1_eq :
+  (z1:Int_carrier)(z1':Int_carrier)(z1r:R z1 z1')(z2:Int)  ->
+  [ add1 z1 z2 : Int = add1 z1' z2: Int ]
+as \z1 z1' z1r z2 ->
+  z2#elimq for z2. [ add1 z1 z2 : Int = add1 z1' z2 : Int ]
+    { [z2] -> same-class (add_lemma z1 z1' z1r z2 z2 refl)
+    ; z2 z2' z2r -> coherence(lemma z1 z1' z2 z2' z2r) (* this relies on proof irrelevance for equality proofs *)
+    }
+
+
+define add_int : Int -> Int -> Int
+as \z1 z2 -> z1#elimq for x.Int
+               { [z1] -> add1 z1 z2
+               ; z1 z1' r1 -> add1_eq z1 z1' r1 z2 }
+
+define inject : Nat -> Int
+as \n -> [(n, Zero)]
+
+define one : Int
+as inject (Succ Zero)
+
+define minus_one : Int
+as negate one
+
+define inverses :
+  (z : Int) -> [ add_int z (negate z) : Int = zero : Int ]
+as \z -> z#elimq for z. [ add_int z (negate z) : Int = zero : Int ]
+          { [z] -> same-class(trans Nat Nat
+                                 (add (add (z#fst) (z#snd)) Zero)
+                                 (add (z#fst) (z#snd))
+                                 (add (z#snd) (z#fst))
+                                 (add_n_Zero (add (z#fst) (z#snd)))
+                                 (add_comm (z#fst) (z#snd)))
+          ; z1 z2 zr ->
+              coherence(subst(Int, x. [add_int x (negate x) : Int = zero : Int],
+                              [z1], [z2], same-class(zr))) }
+
+define comm :
+  (z1:Int)(z2:Int) ->
+  [ add_int z1 z2 : Int = add_int z2 z1 : Int]
+as \z1 z2 ->
+     z1#elimq for z1. [add_int z1 z2 : Int = add_int z2 z1 : Int]
+       { [z1] -> z2#elimq for z2. [add_int [z1] z2 : Int = add_int z2 [z1] : Int]
+                   { [z2] ->
+                       same-class(trans Nat Nat
+                                     (add (add (z1#fst) (z2#fst)) (add (z2#snd) (z1#snd)))
+                                     (add (add (z2#fst) (z1#fst)) (add (z2#snd) (z1#snd)))
+                                     (add (add (z2#fst) (z1#fst)) (add (z1#snd) (z2#snd)))
+                                     (f_equal (\x -> add x (add (z2#snd) (z1#snd))) (add (z1#fst) (z2#fst)) (add (z2#fst) (z1#fst)) (add_comm (z1#fst) (z2#fst)))
+                                     (f_equal (\x -> add (add (z2#fst) (z1#fst)) x) (add (z2#snd) (z1#snd)) (add (z1#snd) (z2#snd)) (add_comm (z2#snd) (z1#snd))))
+                   ; z2 z2' z2r ->
+                       coherence(subst(Int, x. [add_int [z1] x : Int = add_int x [z1] : Int ], [z2], [z2'], same-class(z2r))) }
+       ; z1 z1' z1r ->
+           coherence(subst(Int, x.[add_int x z2 : Int = add_int z2 x : Int],
+                           [z1],[z1'],same-class(z1r)))
+       }
+
+define F : Int -> Set
+as \z -> (b : Bool) * b by_cases for x.Set { True -> [z : Int = zero : Int]; False -> [z : Int = one : Int ] }
+
+define v : F zero
+as (True, refl)
+
+define hofmann2 : F (add_int one (negate one))
+as coerce(v, F zero, F (add_int one (negate one)),
+          subst(Int,x.F x,zero,add_int one (negate one),
+                symm Int (add_int one (negate one)) zero (inverses one)))
+
+define test_canonicity :
+  [ hofmann2 : F (add_int one (negate one))
+  = (True, same-class(refl)) : F (add_int one (negate one)) ]
+as refl

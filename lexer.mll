@@ -32,6 +32,9 @@ rule token = parse
 | "Zero"    { ZERO }
 | "Succ"    { SUCC }
 | "#recursion" { HASH_RECURSION }
+| "#elimq"  { HASH_ELIMQ }
+| "same-class" { SAME_CLASS }
+| "/"       { SLASH }
 | "by_cases" { BY_CASES }
 | "for"     { FOR }
 | "refl"    { REFL }

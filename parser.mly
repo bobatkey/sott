@@ -5,6 +5,7 @@ type elim =
   | Apply    of term * Location.t
   | ElimBool of term binder * term * term * Location.t
   | ElimNat  of term binder * term * term binder binder * Location.t
+  | ElimQ    of term binder * term binder * term binder binder binder * Location.t
   | Project  of [`fst | `snd] * Location.t
 
 let nil =
@@ -19,16 +20,19 @@ let build_elim elims = function
      { elims_data = Project (elims, dir); elims_loc }
   | ElimNat (ty, tm_z, tm_s, elims_loc) ->
      { elims_data = ElimNat (elims, ty, tm_z, tm_s); elims_loc }
+  | ElimQ (ty, tm, tm_eq, elims_loc) ->
+     { elims_data = ElimQ (elims, ty, tm, tm_eq); elims_loc }
 %}
 
 %token <string> IDENT
 %token LPAREN LBRACE LSQBRACK
 %token RPAREN RBRACE RSQBRACK
-%token DOT COMMA COLON SEMICOLON EQUALS
+%token DOT COMMA COLON SEMICOLON EQUALS SLASH
 %token ARROW ASTERISK
 %token TRUE FALSE BOOL BY_CASES FOR REFL COH SUBST FUNEXT
 %token HASH_FST HASH_SND
 %token NAT ZERO SUCC HASH_RECURSION
+%token HASH_ELIMQ SAME_CLASS
 %token SET
 %token DEFINE AS
 %token COERCE
@@ -82,6 +86,14 @@ sigma_term:
     { { term_data = Sigma (tS, Scoping.bind_anon tT)
       ; term_loc  = Location.mk $startpos $endpos
       } }
+  | t=quottype_term
+    { t }
+
+quottype_term:
+  | ty=quottype_term; SLASH; r=app_term
+    { { term_data = QuotType (ty, r)
+      ; term_loc  = Location.mk $startpos $endpos
+      } }
   | t=app_term
     { t }
 
@@ -100,8 +112,8 @@ base_term:
   | REFL
     { { term_data = Refl
       ; term_loc  = Location.mk $startpos $endpos } }
-  | COH
-    { { term_data = Coh
+  | COH; LPAREN; tm_eq=term; RPAREN
+    { { term_data = Coh tm_eq
       ; term_loc  = Location.mk $startpos $endpos } }
   | FUNEXT; LPAREN; x1=IDENT; x2=IDENT; xe=IDENT; DOT; e=term; RPAREN
     { { term_data = Funext (Scoping.bind3 x1 x2 xe e)
@@ -113,6 +125,9 @@ base_term:
             COMMA; tm_e=term;
            RPAREN
     { { term_data = Subst { ty_s; ty_t = Scoping.bind x ty_t; tm_x; tm_y; tm_e }
+      ; term_loc  = Location.mk $startpos $endpos } }
+  | SAME_CLASS; LPAREN; t=term; RPAREN
+    { { term_data = SameClass t
       ; term_loc  = Location.mk $startpos $endpos } }
   | SET
     { { term_data = Set
@@ -139,6 +154,9 @@ base_term:
       EQUALS; tm2=term; COLON; ty2=term;
     RSQBRACK
     { { term_data = TmEq {tm1; ty1; tm2; ty2}
+      ; term_loc  = Location.mk $startpos $endpos } }
+  | LSQBRACK; t=term; RSQBRACK
+    { { term_data = QuotIntro t
       ; term_loc  = Location.mk $startpos $endpos } }
   | h=head
     { { term_data = Neutral (h, nil)
@@ -182,3 +200,8 @@ elim:
             SEMICOLON SUCC; n=IDENT; p=IDENT; ARROW; tm_s=term;
             RBRACE
       { ElimNat (Scoping.bind x ty, tm_z, Scoping.bind2 n p tm_s, Location.mk $startpos $endpos) }
+  | HASH_ELIMQ; FOR; x=IDENT; DOT; ty=term;
+       LBRACE; LSQBRACK; a=IDENT; RSQBRACK; ARROW; tm=term
+    SEMICOLON; x1=IDENT; x2=IDENT; xr=IDENT; ARROW; tm_eq=term
+       RBRACE
+      { ElimQ (Scoping.bind x ty, Scoping.bind a tm, Scoping.bind3 x1 x2 xr tm_eq, Location.mk $startpos $endpos) }

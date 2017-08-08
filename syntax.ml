@@ -13,6 +13,9 @@ and term_data =
   | Pi of term * term binder
   | Lam of term binder
 
+  | QuotType  of term * term
+  | QuotIntro of term
+
   | Sigma of term * term binder
   | Pair of term * term
 
@@ -35,8 +38,9 @@ and term_data =
              ; tm_e : term
              }
   | Refl
-  | Coh
+  | Coh of term
   | Funext of term binder binder binder
+  | SameClass of term
 
   (* placeholder for an erased proof term; only generated during
      reification. *)
@@ -68,6 +72,7 @@ and elims_data =
   | If      of elims * term binder * term * term
   | Project of elims * [`fst | `snd]
   | ElimNat of elims * term binder * term * term binder binder
+  | ElimQ   of elims * term binder * term binder * term binder binder binder
 
 let mk_elim elims_data =
   { elims_data; elims_loc = Location.generated }
@@ -100,6 +105,12 @@ module AlphaEquality = struct
        equal_term s1 s2 && binder equal_term t1 t2
     | Pair (s1, t1), Pair (s2, t2) ->
        equal_term s1 s2 && equal_term t1 t2
+
+    | QuotType (t1, r1), QuotType (t2, r2) ->
+       equal_term t1 t2 && equal_term r1 r2
+    | QuotIntro t1, QuotIntro t2 ->
+       equal_term t1 t2
+  
     | Bool, Bool
     | True, True
     | False, False
@@ -123,11 +134,13 @@ module AlphaEquality = struct
        equal_term tm_x tm_x' &&
        equal_term tm_y tm_y' &&
        equal_term tm_e tm_e'
-    | Refl, Refl
-    | Coh,  Coh ->
+    | Refl, Refl ->
        true
     | Funext e, Funext e' ->
        binder (binder (binder equal_term)) e e'
+    | SameClass e, SameClass e'
+    | Coh e, Coh e' ->
+       equal_term e e'
     | Irrel, Irrel ->
        true
     | _, _ ->
@@ -164,6 +177,12 @@ module AlphaEquality = struct
        binder equal_term ty ty' &&
        equal_term tm_z tm_z' &&
        binder (binder equal_term) tm_s tm_s'
+    | ElimQ (es,  ty,  tm,  tm_eq),
+      ElimQ (es', ty', tm', tm_eq') ->
+       equal_elims es es' &&
+       binder equal_term ty ty' &&
+       binder equal_term tm tm' &&
+       binder (binder (binder equal_term)) tm_eq tm_eq'
     | Project (es, dir), Project (es', dir') ->
        dir = dir' && equal_elims es es'
     | _, _ ->
@@ -235,6 +254,12 @@ end = struct
          { tm with
              term_data = Pair (traverse_term j t1, traverse_term j t2)
          }
+      | {term_data = QuotType (s, r)} as tm ->
+         { tm with
+             term_data = QuotType (traverse_term j s, traverse_term j r) }
+      | {term_data = QuotIntro t} as tm ->
+         { tm with
+             term_data = QuotIntro (traverse_term j t) }
       | {term_data = TyEq (s, t)} as tm ->
          { tm with
              term_data = TyEq (traverse_term j s, traverse_term j t)
@@ -260,11 +285,19 @@ end = struct
                                ; tm_e = traverse_term j tm_e
                                }
          }
-      | {term_data = Refl | Coh} as tm ->
+      | {term_data = Refl} as tm ->
          tm
       | {term_data = Funext prf} as tm ->
          { tm with
              term_data = Funext (binder (binder (binder traverse_term)) j prf)
+         }
+      | {term_data = SameClass prf} as tm ->
+         { tm with
+             term_data = SameClass (traverse_term j prf)
+         }
+      | {term_data = Coh prf} as tm ->
+         { tm with
+             term_data = Coh (traverse_term j prf)
          }
       | {term_data = Irrel} ->
          failwith "internal error: attempt to bind in an erased proof term"
@@ -310,6 +343,13 @@ end = struct
                                    binder traverse_term j ty,
                                    traverse_term j tm_z,
                                    binder (binder traverse_term) j tm_s)
+         }
+      | { elims_data = ElimQ (elims, ty, tm, tm_eq) } as es ->
+         { es with
+             elims_data = ElimQ (traverse_elims j elims,
+                                 binder traverse_term j ty,
+                                 binder traverse_term j tm,
+                                 binder (binder (binder traverse_term)) j tm_eq)
          }
     in
     traverse_term j tm
@@ -375,6 +415,8 @@ type value =
   | V_Nat
   | V_Zero
   | V_Succ    of value
+  | V_QuotType  of value * value
+  | V_QuotIntro of value
   | V_Pi      of value * value v_binder
   | V_Sigma   of value * value v_binder
   | V_Pair    of value * value
@@ -391,6 +433,7 @@ and v_elims =
   | E_If  of v_elims * value v_binder * value * value
   | E_Project of v_elims * [`fst|`snd]
   | E_ElimNat of v_elims * value v_binder * value * value v_binder v_binder
+  | E_ElimQ   of v_elims * value v_binder * value v_binder
 
 and v_head =
   | H_Var of { shift : shift; typ : value }
@@ -435,6 +478,13 @@ let elimnat ty v_z v_s =
   in
   natrec
 
+let elimq ty v = function
+  | V_QuotIntro a -> inst_binder v a
+  | V_Neutral (h, es) ->
+     V_Neutral (h, E_ElimQ (es, ty, v))
+  | _ ->
+     failwith "internal error: type error in quotient value elimination"
+
 let rec eval_elims t = function
   | E_Nil -> t
   | E_App (es, v) -> apply (eval_elims t es) v
@@ -455,6 +505,8 @@ let rec eval_elims t = function
        | _  -> failwith "internal error: type error in projection")
   | E_ElimNat (es, ty, v_z, v_s) ->
      elimnat ty v_z v_s (eval_elims t es)
+  | E_ElimQ (es, ty, v) ->
+     elimq ty v (eval_elims t es)
 
 
 let var ty i =
@@ -462,6 +514,36 @@ let var ty i =
 
 let free x ty =
   V_Neutral (H_Free_local { name = x; typ = ty }, E_Nil)
+
+let (@->) s t = V_Pi (s, VB ("x", fun _ -> t))
+
+let rec coerce v src tgt = match v, src, tgt with
+  | v, V_Bool, V_Bool -> v
+  | v, V_Set,  V_Set  -> v
+  | n, V_Nat, V_Nat -> n
+  | f, V_Pi (ty_s, VB (_, ty_t)), V_Pi (ty_s', VB (x, ty_t')) ->
+     let x = match f with V_Lam (VB (x, _)) -> x | _ -> x in
+     V_Lam
+       (VB (x, fun s' ->
+            let s = coerce s' ty_s' ty_s in
+            let t = apply f s in
+            coerce t (ty_t' s') (ty_t s)))
+  | p, V_Sigma (ty_s, VB (_, ty_t)), V_Sigma (ty_s', VB (_, ty_t')) ->
+     let s' = coerce (vfst p) ty_s ty_s' in
+     V_Pair (s', coerce (vsnd p) (ty_t (vfst p)) (ty_t' s'))
+  | c, V_QuotType (ty1, r1), V_QuotType (ty2, r2) ->
+     elimq
+       (VB ("x", fun _ -> V_QuotType (ty2, r2)))
+       (VB ("x", fun x -> V_QuotIntro (coerce x ty1 ty2)))
+       c
+  | _, V_TyEq _, V_TyEq _
+  | _, V_TmEq _, V_TmEq _
+  | _, V_Neutral _, _
+  | _, _, V_Neutral _ ->
+     V_Neutral (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
+  | _ ->
+     (* FIXME: ought to be a suspended falsity elimination *)
+     V_Neutral (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
 
 (**********************************************************************)
 (* FIXME: equality test rather than reify to term and check for alpha
@@ -478,6 +560,8 @@ let rec reify_type v i = match v with
      mk_term Bool
   | V_Nat ->
      mk_term Nat
+  | V_QuotType (ty, r) ->
+     mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set) r i))
   | V_TyEq (s, t) ->
      mk_term (TyEq (reify_type s i, reify_type t i))
   | V_TmEq {s; s_ty; t; t_ty} ->
@@ -513,6 +597,8 @@ and reify ty v i = match ty, v with
      mk_term (Succ (reify V_Nat n i))
   | V_Set,    v ->
      reify_type v i
+  | V_QuotType (t, _), V_QuotIntro v ->
+     mk_term (QuotIntro (reify t v i))
   | _, V_Neutral (h, es) ->
      reify_neutral h es i
   | _ ->
@@ -586,6 +672,16 @@ and reify_elims h ty es i = match es with
           elim_ty (V_Neutral (h, es))
        | _ ->
           failwith "internal error: type error reifying bool case switch")
+  | E_ElimQ (es, VB (x, elim_ty), VB (a, v)) ->
+     (match reify_elims h ty es i with
+       | es', (V_QuotType (s, _) as ty') ->
+          mk_elim (ElimQ (es',
+                          B (x, reify_type (elim_ty (var ty' i)) (i+1)),
+                          B (a, reify (elim_ty (V_QuotIntro (var s i))) (v (var s i)) (i+1)),
+                          B ("x1", B ("x2", B ("xr", mk_term Irrel))))),
+          elim_ty (V_Neutral (h, es))
+       | _ ->
+          failwith "internal error: type error reifying quotient elim")
 
 let equal_types ty1 ty2 =
   let ty1 = reify_type ty1 0 in
@@ -688,29 +784,6 @@ module Evaluation : sig
   val eval0 : Context.t -> term -> value
   val eval1 : Context.t -> term binder -> value -> value
 end = struct
-  let rec coerce v src tgt = match v, src, tgt with
-    | v, V_Bool, V_Bool -> v
-    | v, V_Set,  V_Set  -> v
-    | f, V_Pi (ty_s, VB (_, ty_t)), V_Pi (ty_s', VB (x, ty_t')) ->
-       let x = match f with V_Lam (VB (x, _)) -> x | _ -> x in
-       V_Lam
-         (VB (x, fun s' ->
-              let s = coerce s' ty_s' ty_s in
-              let t = apply f s in
-              coerce t (ty_t' s') (ty_t s)))
-    | p, V_Sigma (ty_s, VB (_, ty_t)), V_Sigma (ty_s', VB (_, ty_t')) ->
-       let s' = coerce (vfst p) ty_s ty_s' in
-       V_Pair (s', coerce (vsnd p) (ty_t (vfst p)) (ty_t' s'))
-    | n, V_Nat, V_Nat -> n
-    | _, V_TyEq _, V_TyEq _
-    | _, V_TmEq _, V_TmEq _
-    | _, V_Neutral _, _
-    | _, _, V_Neutral _ ->
-       V_Neutral (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
-    | _ ->
-       (* FIXME: ought to be a suspended falsity elimination *)
-       V_Neutral (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
-
   let binder k (B (nm, tm)) env =
     VB (nm, fun v -> k tm (v::env))
 
@@ -736,7 +809,12 @@ end = struct
       | Zero  -> V_Zero
       | Succ t -> V_Succ (eval t env)
 
-      | Subst _ | Coh | Funext _ | Refl | Irrel ->
+      | QuotType (ty, r) ->
+         V_QuotType (eval ty env, eval r env)
+      | QuotIntro tm ->
+         V_QuotIntro (eval tm env)
+
+      | Subst _ | Coh _ | Funext _ | Refl | Irrel | SameClass _ ->
          V_Irrel
 
     and eval_head h env = match h.head_data with
@@ -780,6 +858,11 @@ end = struct
            (eval tm_z env)
            (binder (binder eval) tm_s env)
            (eval_elims scrutinee elims env)
+      | ElimQ (elims, ty, tm, _) ->
+         elimq
+           (binder eval ty env)
+           (binder eval tm env)
+           (eval_elims scrutinee elims env)
     in
     eval tm
 
@@ -822,6 +905,11 @@ let rec is_type ctxt = function
      is_type ctxt s >>= fun () ->
      let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
      is_type ctxt t
+
+  | { term_data = QuotType (ty, r) } ->
+     is_type ctxt ty >>= fun () ->
+     let ty = Evaluation.eval0 ctxt ty in
+     has_type ctxt (ty @-> ty @-> V_Set) r
 
   | { term_data = TyEq (s, t) } ->
      is_type ctxt s >>= fun () ->
@@ -884,6 +972,11 @@ and has_type ctxt ty tm = match ty, tm with
      let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
      has_type ctxt V_Set t
 
+  | V_Set, { term_data = QuotType (ty, r) } ->
+     has_type ctxt V_Set ty >>= fun () ->
+     let ty = Evaluation.eval0 ctxt ty in
+     has_type ctxt (ty @-> ty @-> V_Set) r
+
   | V_Set, { term_data = TyEq (s, t) } ->
      is_type ctxt s >>= fun () ->
      is_type ctxt t
@@ -912,6 +1005,11 @@ and has_type ctxt ty tm = match ty, tm with
   | V_Nat, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a Nat, but isn't"))
 
+  | V_QuotType (ty, _), { term_data = QuotIntro tm } ->
+     has_type ctxt ty tm
+  | V_QuotType (ty, _), { term_loc } ->
+     Error (`MsgLoc (term_loc, "This term is expected to be a member of a quotient type, but isn't"))
+     
   | V_TyEq (ty1, ty2),
     { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }; term_loc } ->
      is_type ctxt ty_s >>= fun () ->
@@ -978,19 +1076,28 @@ and has_type ctxt ty tm = match ty, tm with
      in
      has_type ctxt reqd_ty proof
 
-  | V_TmEq {s; s_ty; t; t_ty}, { term_data = Coh; term_loc } ->
-     let t' =
-       V_Neutral (H_Coe { coercee = s; src_type = s_ty; tgt_type = t_ty }, E_Nil)
-     in
-     if equal_terms t t' t_ty then
+  | V_TmEq {s; s_ty; t; t_ty}, { term_data = Coh prf; term_loc } ->
+     has_type ctxt (V_TyEq (s_ty, t_ty)) prf >>= fun () -> 
+     if equal_terms t (coerce s s_ty t_ty) t_ty then
        Ok ()
      else
        Error (`MsgLoc (term_loc, "invalid Coh"))
 
+  | V_TmEq { s = V_QuotIntro a1; s_ty = V_QuotType (ty1, r1)
+           ; t = V_QuotIntro a2; t_ty = V_QuotType (ty2, r2) },
+    { term_data = SameClass prf; term_loc } ->
+     (if equal_types ty1 ty2 then Ok ()
+      else Error (`MsgLoc (term_loc, "underlying types not equal")))
+     >>= fun () ->
+     (if equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set) then Ok ()
+      else Error (`MsgLoc (term_loc, "relations not equal")))
+     >>= fun () ->
+     has_type ctxt (apply (apply r1 a1) a2) prf
+     
   | V_TmEq _, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a proof of a term equality, but isn't"))
 
-  | (V_True | V_False | V_Zero | V_Succ _ | V_Lam _ | V_Pair _ | V_Irrel | V_Neutral _), _ ->
+  | (V_True | V_False | V_Zero | V_Succ _ | V_Lam _ | V_Pair _ | V_QuotIntro _ | V_Irrel | V_Neutral _), _ ->
      failwith "internal error: has_type: attempting to check canonical term aganst non canonical type"
 
 and synthesise_head_type ctxt = function
@@ -1067,7 +1174,35 @@ and synthesise_elims_type ctxt h = function
            has_type ctxt (ty (V_Succ (free n V_Nat))) tm_s) >>= fun () ->
           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
        | _ ->
-          Error (`MsgLoc (elims_loc, "attempt to elimination non natural")))
+          Error (`MsgLoc (elims_loc, "attempt to eliminate non natural")))
+
+  | { elims_data = ElimQ (elims, elim_ty, tm, tm_eq); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= function
+       | V_QuotType (ty_underlying, r) as ty ->
+          (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
+           is_type ctxt elim_ty)
+          >>= fun () ->
+          let ty = Evaluation.eval1 ctxt elim_ty in
+          (let n, tm, ctxt = ScopeClose.close ty_underlying tm ctxt in
+           has_type ctxt (ty (V_QuotIntro (free n ty_underlying))) tm)
+          >>= fun () ->
+          let tm = Evaluation.eval1 ctxt tm in
+          (let x1, x2, xr, tm_eq, ctxt =
+             ScopeClose.close3
+               ty_underlying
+               (fun _ -> ty_underlying)
+               (fun x1 x2 -> apply (apply r (free x1 ty_underlying)) (free x2 ty_underlying))
+               tm_eq
+               ctxt
+           in
+           let x1 = free x1 ty_underlying in
+           let x2 = free x2 ty_underlying in
+           has_type ctxt (V_TmEq { s = tm x1; s_ty = ty (V_QuotIntro x1)
+                                 ; t = tm x2; t_ty = ty (V_QuotIntro x2) }) tm_eq)
+          >>= fun () ->
+          Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+       | _ ->
+          Error (`MsgLoc (elims_loc, "attempt to eliminate no quotient value")))
 
   | { elims_data = Project (elims, `fst); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= function
