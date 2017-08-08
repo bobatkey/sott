@@ -21,6 +21,10 @@ and term_data =
   | True
   | False
 
+  | Nat
+  | Zero
+  | Succ of term
+
   | TyEq of term * term
   | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
 
@@ -64,11 +68,14 @@ and elims_data =
   | App     of elims * term
   | If      of elims * term binder * term * term
   | Project of elims * [`fst | `snd]
+  | ElimNat of elims * term binder * term * term binder binder
 
 
 
 module Scoping : sig
   val bind : string -> term -> term binder
+
+  val bind2 : string -> string -> term -> term binder binder
 
   val bind3 : string -> string -> string -> term -> term binder binder binder
 

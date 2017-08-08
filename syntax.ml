@@ -20,6 +20,10 @@ and term_data =
   | True
   | False
 
+  | Nat
+  | Zero
+  | Succ of term
+
   | TyEq of term * term
   | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
 
@@ -63,6 +67,7 @@ and elims_data =
   | App     of elims * term
   | If      of elims * term binder * term * term
   | Project of elims * [`fst | `snd]
+  | ElimNat of elims * term binder * term * term binder binder
 
 let mk_elim elims_data =
   { elims_data; elims_loc = Location.generated }
@@ -97,8 +102,12 @@ module AlphaEquality = struct
        equal_term s1 s2 && equal_term t1 t2
     | Bool, Bool
     | True, True
-    | False, False ->
+    | False, False
+    | Nat, Nat
+    | Zero, Zero ->
        true
+    | Succ t1, Succ t2 ->
+       equal_term t1 t2
     | TyEq (s1, t1), TyEq (s2, t2) ->
        equal_term s1 s2 && equal_term t1 t2
     | TmEq { tm1;      ty1;      tm2;      ty2 },
@@ -149,6 +158,12 @@ module AlphaEquality = struct
        binder equal_term ty ty' &&
        equal_term tm_t tm_t' &&
        equal_term tm_f tm_f'
+    | ElimNat (es,  ty,  tm_z,  tm_s),
+      ElimNat (es', ty', tm_z', tm_s') ->
+       equal_elims es es' &&
+       binder equal_term ty ty' &&
+       equal_term tm_z tm_z' &&
+       binder (binder equal_term) tm_s tm_s'
     | Project (es, dir), Project (es', dir') ->
        dir = dir' && equal_elims es es'
     | _, _ ->
@@ -168,12 +183,21 @@ end
 module Scoping : sig
   val bind : string -> term -> term binder
 
+  val bind2 : string -> string -> term -> term binder binder
+
   val bind3 : string -> string -> string -> term -> term binder binder binder
 
   val bind_anon : term -> term binder
 
   module Close (Ctxt : EXTENDABLE_CONTEXT) : sig
     val close : Ctxt.value -> term binder -> Ctxt.t -> string * term * Ctxt.t
+
+    val close2 :
+      Ctxt.value ->
+      (string -> Ctxt.value) ->
+      term binder binder ->
+      Ctxt.t ->
+      string * string * term * Ctxt.t
 
     val close3 :
       Ctxt.value ->
@@ -223,8 +247,10 @@ end = struct
                               ; ty2 = traverse_term j ty2
                               }
          }
-      | {term_data = Bool | True | False} as tm ->
+      | {term_data = Bool | True | False | Nat | Zero} as tm ->
          tm
+      | {term_data = Succ t} as tm ->
+         { tm with term_data = Succ (traverse_term j t) }
       | {term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }} as tm ->
          { tm with
              term_data = Subst { ty_s = traverse_term j ty_s
@@ -278,6 +304,13 @@ end = struct
          { es with
              elims_data = Project (traverse_elims j elims, component)
          }
+      | { elims_data = ElimNat (elims, ty, tm_z, tm_s) } as es ->
+         { es with
+             elims_data = ElimNat (traverse_elims j elims,
+                                   binder traverse_term j ty,
+                                   traverse_term j tm_z,
+                                   binder (binder traverse_term) j tm_s)
+         }
     in
     traverse_term j tm
 
@@ -294,6 +327,11 @@ end = struct
   let bind x t =
     B (x, bind_term x 0 t)
 
+  let bind2 x y t =
+    let t1 = B (y, bind_term y 0 t) in
+    let t2 = B (x, binder (bind_term x) 0 t1) in
+    t2
+
   let bind3 x y z t =
     let t1 = B (z, bind_term z 0 t) in
     let t2 = B (y, binder (bind_term y) 0 t1) in
@@ -307,6 +345,11 @@ end = struct
     let close v (B (nm, tm)) ctxt =
       let nm, ctxt = Ctxt.extend nm v ctxt in
       nm, close_term nm 0 tm, ctxt
+
+    let close2 v1 v2 (B (nm1, B (nm2, t))) ctxt =
+      let nm1, ctxt = Ctxt.extend nm1 v1 ctxt in
+      let nm2, ctxt = Ctxt.extend nm2 (v2 nm1) ctxt in
+      nm1, nm2, (close_term nm2 0 (close_term nm1 1 t)), ctxt
 
     let close3 v1 v2 v3 (B (nm1, B (nm2, B (nm3, t)))) ctxt =
       let nm1, ctxt = Ctxt.extend nm1 v1 ctxt in
@@ -329,6 +372,9 @@ type value =
   | V_Bool
   | V_True
   | V_False
+  | V_Nat
+  | V_Zero
+  | V_Succ    of value
   | V_Pi      of value * value v_binder
   | V_Sigma   of value * value v_binder
   | V_Pair    of value * value
@@ -344,6 +390,7 @@ and v_elims =
   | E_App of v_elims * value
   | E_If  of v_elims * value v_binder * value * value
   | E_Project of v_elims * [`fst|`snd]
+  | E_ElimNat of v_elims * value v_binder * value * value v_binder v_binder
 
 and v_head =
   | H_Var of { shift : shift; typ : value }
@@ -354,9 +401,10 @@ and v_head =
              ; tgt_type : value
              }
 
+let inst_binder (VB (_, f)) v = f v
 
 let apply v1 v2 = match v1 with
-  | V_Lam (VB (_, f)) -> f v2
+  | V_Lam v           -> inst_binder v v2
   | V_Neutral (h, es) -> V_Neutral (h, E_App (es, v2))
   | _                 -> failwith "internal type error"
 
@@ -376,6 +424,17 @@ let vsnd = function
   | _ ->
      failwith "internal error: type error in vsnd"
 
+let elimnat ty v_z v_s =
+  let rec natrec = function
+    | V_Zero   -> v_z
+    | V_Succ n -> inst_binder (inst_binder v_s n) (natrec n)
+    | V_Neutral (h, es) ->
+       V_Neutral (h, E_ElimNat (es, ty, v_z, v_s))
+    | _ ->
+       failwith "internal error: type error in Nat elimination"
+  in
+  natrec
+
 let rec eval_elims t = function
   | E_Nil -> t
   | E_App (es, v) -> apply (eval_elims t es) v
@@ -394,6 +453,9 @@ let rec eval_elims t = function
        | V_Neutral (h, es), _ ->
           V_Neutral (h, E_Project (es, component))
        | _  -> failwith "internal error: type error in projection")
+  | E_ElimNat (es, ty, v_z, v_s) ->
+     elimnat ty v_z v_s (eval_elims t es)
+
 
 let var ty i =
   V_Neutral (H_Var { shift = i; typ = ty }, E_Nil)
@@ -414,6 +476,8 @@ let rec reify_type v i = match v with
      mk_term Set
   | V_Bool ->
      mk_term Bool
+  | V_Nat ->
+     mk_term Nat
   | V_TyEq (s, t) ->
      mk_term (TyEq (reify_type s i, reify_type t i))
   | V_TmEq {s; s_ty; t; t_ty} ->
@@ -443,6 +507,10 @@ and reify ty v i = match ty, v with
      mk_term True
   | V_Bool,   V_False ->
      mk_term False
+  | V_Nat, V_Zero ->
+     mk_term Zero
+  | V_Nat, V_Succ n ->
+     mk_term (Succ (reify V_Nat n i))
   | V_Set,    v ->
      reify_type v i
   | _, V_Neutral (h, es) ->
@@ -504,6 +572,20 @@ and reify_elims h ty es i = match es with
           mk_elim (Project (reified_es, `snd)), t (V_Neutral (h, es))
        | _ ->
           failwith "internal error: type error reifying a projection")
+  | E_ElimNat (es, VB (x, elim_ty), v_z, v_s) ->
+     (match reify_elims h ty es i with
+       | es', V_Nat ->
+          mk_elim (ElimNat (es',
+                            B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
+                            reify (elim_ty V_Zero) v_z i,
+                            let VB (n, v_s) = v_s in
+                            let var_n = var V_Nat i in
+                            let VB (p, v_s) = v_s var_n in
+                            let var_p = var (elim_ty var_n) (i+1) in
+                            B (n, B (p, reify (elim_ty var_n) (v_s var_p) (i+2))))),
+          elim_ty (V_Neutral (h, es))
+       | _ ->
+          failwith "internal error: type error reifying bool case switch")
 
 let equal_types ty1 ty2 =
   let ty1 = reify_type ty1 0 in
@@ -619,6 +701,7 @@ end = struct
     | p, V_Sigma (ty_s, VB (_, ty_t)), V_Sigma (ty_s', VB (_, ty_t')) ->
        let s' = coerce (vfst p) ty_s ty_s' in
        V_Pair (s', coerce (vsnd p) (ty_t (vfst p)) (ty_t' s'))
+    | n, V_Nat, V_Nat -> n
     | _, V_TyEq _, V_TyEq _
     | _, V_TmEq _, V_TmEq _
     | _, V_Neutral _, _
@@ -649,6 +732,9 @@ end = struct
       | Bool  -> V_Bool
       | True  -> V_True
       | False -> V_False
+      | Nat   -> V_Nat
+      | Zero  -> V_Zero
+      | Succ t -> V_Succ (eval t env)
 
       | Subst _ | Coh | Funext _ | Refl | Irrel ->
          V_Irrel
@@ -688,6 +774,12 @@ end = struct
          vfst (eval_elims scrutinee elims env)
       | Project (elims, `snd) ->
          vsnd (eval_elims scrutinee elims env)
+      | ElimNat (elims, ty, tm_z, tm_s) ->
+         elimnat
+           (binder eval ty env)
+           (eval tm_z env)
+           (binder (binder eval) tm_s env)
+           (eval_elims scrutinee elims env)
     in
     eval tm
 
@@ -716,6 +808,9 @@ let rec is_type ctxt = function
      Ok ()
 
   | { term_data = Bool } ->
+     Ok ()
+
+  | { term_data = Nat } ->
      Ok ()
 
   | { term_data = Pi (s, t) } ->
@@ -776,7 +871,7 @@ and has_type ctxt ty tm = match ty, tm with
   | V_Sigma _, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a pair, but isn't"))
 
-  | V_Set, { term_data = Bool } ->
+  | V_Set, { term_data = Bool | Nat } ->
      Ok ()
 
   | V_Set, { term_data = Pi (s, t) } ->
@@ -809,6 +904,13 @@ and has_type ctxt ty tm = match ty, tm with
 
   | V_Bool, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a boolean, but isn't"))
+
+  | V_Nat, { term_data = Zero } ->
+     Ok ()
+  | V_Nat, { term_data = Succ n } ->
+     has_type ctxt V_Nat n
+  | V_Nat, { term_loc } ->
+     Error (`MsgLoc (term_loc, "This term is expected to be a Nat, but isn't"))
 
   | V_TyEq (ty1, ty2),
     { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }; term_loc } ->
@@ -888,7 +990,7 @@ and has_type ctxt ty tm = match ty, tm with
   | V_TmEq _, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a proof of a term equality, but isn't"))
 
-  | (V_True | V_False | V_Lam _ | V_Pair _ | V_Irrel | V_Neutral _), _ ->
+  | (V_True | V_False | V_Zero | V_Succ _ | V_Lam _ | V_Pair _ | V_Irrel | V_Neutral _), _ ->
      failwith "internal error: has_type: attempting to check canonical term aganst non canonical type"
 
 and synthesise_head_type ctxt = function
@@ -946,6 +1048,26 @@ and synthesise_elims_type ctxt h = function
           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
        | _ ->
           Error (`MsgLoc (elims_loc, "attempt to eliminate non boolean")))
+
+  | { elims_data = ElimNat (elims, elim_ty, tm_z, tm_s); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= function
+       | V_Nat ->
+          (let _, elim_ty, ctxt = ScopeClose.close V_Nat elim_ty ctxt in
+           is_type ctxt elim_ty)
+          >>= fun () ->
+          let ty = Evaluation.eval1 ctxt elim_ty in
+          has_type ctxt (ty V_Zero) tm_z >>= fun () ->
+          (let n, _, tm_s, ctxt =
+             ScopeClose.close2
+               V_Nat
+               (fun n -> ty (free n V_Nat))
+               tm_s
+               ctxt
+           in
+           has_type ctxt (ty (V_Succ (free n V_Nat))) tm_s) >>= fun () ->
+          Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+       | _ ->
+          Error (`MsgLoc (elims_loc, "attempt to elimination non natural")))
 
   | { elims_data = Project (elims, `fst); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= function

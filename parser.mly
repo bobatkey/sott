@@ -4,6 +4,7 @@ open Syntax
 type elim =
   | Apply    of term * Location.t
   | ElimBool of term binder * term * term * Location.t
+  | ElimNat  of term binder * term * term binder binder * Location.t
   | Project  of [`fst | `snd] * Location.t
 
 let nil =
@@ -16,6 +17,8 @@ let build_elim elims = function
      { elims_data = If (elims, ty, tm_t, tm_f); elims_loc }
   | Project (dir, elims_loc) ->
      { elims_data = Project (elims, dir); elims_loc }
+  | ElimNat (ty, tm_z, tm_s, elims_loc) ->
+     { elims_data = ElimNat (elims, ty, tm_z, tm_s); elims_loc }
 %}
 
 %token <string> IDENT
@@ -25,6 +28,7 @@ let build_elim elims = function
 %token ARROW ASTERISK
 %token TRUE FALSE BOOL BY_CASES FOR REFL COH SUBST FUNEXT
 %token HASH_FST HASH_SND
+%token NAT ZERO SUCC HASH_RECURSION
 %token SET
 %token DEFINE AS
 %token COERCE
@@ -86,6 +90,9 @@ app_term:
     { let h, es = h, Nil in
       { term_data = Neutral (h, List.fold_left build_elim nil ts)
       ; term_loc  = Location.mk $startpos $endpos } }
+  | SUCC; t=base_term
+    { { term_data = Succ t
+      ; term_loc  = Location.mk $startpos $endpos } }
   | t=base_term
     { t }
 
@@ -119,6 +126,12 @@ base_term:
   | FALSE
     { { term_data = False
       ; term_loc  = Location.mk $startpos $endpos } }
+  | NAT
+    { { term_data = Nat
+      ; term_loc  = Location.mk $startpos $endpos } }
+  | ZERO
+    { { term_data = Zero
+      ; term_loc  = Location.mk $startpos $endpos } }  
   | LSQBRACK; ty1=term; EQUALS; ty2=term; RSQBRACK
     { { term_data = TyEq (ty1, ty2)
       ; term_loc  = Location.mk $startpos $endpos } }
@@ -164,3 +177,8 @@ elim:
       { Project (`fst, Location.mk $startpos $endpos) }
   | HASH_SND
       { Project (`snd, Location.mk $startpos $endpos) }
+  | HASH_RECURSION; FOR; x=IDENT; DOT; ty=term;
+            LBRACE; ZERO; ARROW; tm_z=term;
+            SEMICOLON SUCC; n=IDENT; p=IDENT; ARROW; tm_s=term;
+            RBRACE
+      { ElimNat (Scoping.bind x ty, tm_z, Scoping.bind2 n p tm_s, Location.mk $startpos $endpos) }

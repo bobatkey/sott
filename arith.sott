@@ -1,0 +1,181 @@
+define two : Nat
+as Succ (Succ Zero)
+
+define add : Nat -> Nat -> Nat
+as \m n -> m #recursion for x. Nat
+             { Zero     -> n
+             ; Succ n p -> Succ p
+             }
+
+define test :
+  [add two two : Nat = Succ (Succ two) : Nat]
+as refl
+
+define trans :
+  (A : Set)(B : Set)
+  (a : A)  (b : B)  (c : B) ->
+  [a : A = b : B] ->
+  [b : B = c : B] ->
+  [a : A = c : B]
+as
+  \A -> \B -> \a -> \b -> \c -> \p -> \q ->
+    coerce(p,[a : A = b : B],[a : A = c : B],
+           subst(B,z.[a : A = z : B],b,c,q))
+
+define trans3 :
+  (A:Set)
+  (a:A)
+  (b:A)(p1 : [a : A = b : A])
+  (c:A)(p2 : [b : A = c : A])
+  (d:A)(p3 : [c : A = d : A]) ->
+  [a : A = d : A]
+as \A a b p1 c p2 d p3 ->
+     trans A A a b d p1 (trans A A b c d p2 p3)
+
+define trans4 :
+  (A:Set)
+  (a:A)
+  (b:A)(p1 : [a : A = b : A])
+  (c:A)(p2 : [b : A = c : A])
+  (d:A)(p3 : [c : A = d : A])
+  (e:A)(p4 : [d : A = e : A]) ->
+  [a : A = e : A]
+as \A a b p1 c p2 d p3 e p4 ->
+     trans A A a b e p1 (trans A A b c e p2 (trans A A c d e p3 p4))
+
+define trans5 :
+  (A:Set)
+  (a:A)
+  (b:A)(p1 : [a : A = b : A])
+  (c:A)(p2 : [b : A = c : A])
+  (d:A)(p3 : [c : A = d : A])
+  (e:A)(p4 : [d : A = e : A])
+  (f:A)(p5 : [e : A = f : A]) ->
+  [a : A = f : A]
+as \A a b p1 c p2 d p3 e p4 f p5 ->
+     trans A A a b f p1 (trans A A b c f p2 (trans A A c d f p3 (trans A A d e f p4 p5)))
+
+define symm :
+  (A : Set)(x : A)(y : A)(p : [x : A = y : A]) -> [y : A = x : A]
+as
+  \A x y p ->
+     coerce(refl,[x : A = x : A],[y : A = x : A],
+            subst(A,z.[z : A = x : A],x,y,p))
+
+define f_equal :
+  (f : Nat -> Nat)(x:Nat)(y:Nat) ->
+  [x : Nat = y : Nat] ->
+  [f x : Nat = f y : Nat]
+as \f x y eq ->
+      coerce(refl,[f x : Nat = f x : Nat],[f x : Nat = f y : Nat],
+             subst(Nat,z.[f x : Nat = f z : Nat],x,y,eq))
+
+define add_n_Zero :
+  (n : Nat) -> [add n Zero : Nat = n : Nat]
+as \n ->
+     n #recursion for n. [add n Zero : Nat = n : Nat]
+       { Zero -> refl
+       ; Succ n p -> coerce(refl,
+                            [Succ (add n Zero) : Nat = Succ (add n Zero) : Nat],
+                            [Succ (add n Zero) : Nat = Succ n : Nat],
+                            subst(Nat,x.[Succ (add n Zero) : Nat = Succ x : Nat],
+                                  add n Zero,
+                                  n,
+                                  p))
+       }
+
+define add_Succ :
+  (n : Nat)(m : Nat) -> [Succ (add n m) : Nat = add n (Succ m) : Nat]
+as \n m ->
+     n#recursion for n. [Succ (add n m) : Nat = add n (Succ m) : Nat]
+      { Zero     -> refl
+      ; Succ n p -> f_equal (\n -> Succ n) (Succ (add n m)) (add n (Succ m)) p }
+
+define add_comm :
+  (n : Nat)(m : Nat) -> [add n m : Nat = add m n : Nat]
+as \n m ->
+     n #recursion for n. [add n m : Nat = add m n : Nat]
+       { Zero -> symm Nat (add m Zero) m (add_n_Zero m)
+       ; Succ n p ->
+          trans Nat Nat
+            (Succ (add n m))
+            (Succ (add m n))
+            (add m (Succ n))
+            (f_equal (\n -> Succ n) (add n m) (add m n) p)
+            (add_Succ m n)
+       }
+
+define add_assoc :
+  (a : Nat)(b : Nat)(c : Nat) ->
+  [add a (add b c) : Nat = add (add a b) c : Nat]
+as \a b c ->
+     a#recursion for a. [add a (add b c) : Nat = add (add a b) c : Nat]
+      { Zero     -> refl
+      ; Succ a p -> f_equal (\n -> Succ n) (add a (add b c)) (add (add a b) c) p
+      }
+
+define add_assoc_inv :
+  (a : Nat)(b : Nat)(c : Nat) ->
+  [add (add a b) c  : Nat = add a (add b c) : Nat]
+as \a b c ->
+     symm Nat (add a (add b c)) (add (add a b) c) (add_assoc a b c)
+
+define add_Zero_n :
+  (n : Nat) -> [add Zero n : Nat = n : Nat]
+as \n -> refl
+
+
+define Int_carrier : Set
+as Nat * Nat
+
+define R : Int_carrier -> Int_carrier -> Set
+as \z1 z2 -> [add (z1#fst) (z2#snd) : Nat = add (z2#fst) (z1#snd) : Nat]
+
+define negate_ : Int_carrier -> Int_carrier
+as \z -> (z#snd, z#fst)
+
+define zero_ : Int_carrier
+as (Zero, Zero)
+
+define add_ : Int_carrier -> Int_carrier -> Int_carrier
+as \z1 z2 -> (add (z1#fst) (z2#fst), add (z1#snd) (z2#snd))
+
+define negate_lemma :
+  (z1 : Int_carrier)(z2 : Int_carrier)(r : R z1 z2) -> R (negate_ z1) (negate_ z2)
+as \z1 z2 r ->
+      trans3 Nat
+        (add (z1#snd) (z2#fst))
+        (add (z2#fst) (z1#snd))  (add_comm (z1#snd) (z2#fst))
+        (add (z1#fst) (z2#snd))  (symm Nat (add (z1#fst) (z2#snd)) (add (z2#fst) (z1#snd)) r)
+        (add (z2#snd) (z1#fst))  (add_comm (z1#fst) (z2#snd))
+
+define interchange :
+  (a:Nat)(b:Nat)(c:Nat)(d:Nat) ->
+  [add (add a b) (add c d) : Nat = add (add a c) (add b d) : Nat]
+as \a b c d ->
+     trans5 Nat
+                (add (add a b) (add c d))
+       (* = *)  (add a (add b (add c d)))   (add_assoc_inv a b (add c d))
+       (* = *)  (add a (add (add b c) d))   (f_equal (\x -> add a x)
+                                                     (add b (add c d)) (add (add b c) d)
+                                                     (add_assoc b c d))
+       (* = *)  (add a (add (add c b) d))   (f_equal (\x -> add a (add x d))
+                                                     (add b c) (add c b)
+                                                     (add_comm b c))
+       (* = *)  (add a (add c (add b d)))   (f_equal (\x -> add a x)
+                                                     (add (add c b) d) (add c (add b d))
+                                                     (add_assoc_inv c b d))
+       (* = *)  (add (add a c) (add b d))   (add_assoc a c (add b d))
+
+define add_lemma :
+  (z1 : Int_carrier)(z1' : Int_carrier)(r1 : R z1 z1')
+  (z2 : Int_carrier)(z2' : Int_carrier)(r2 : R z2 z2') ->
+  R (add_ z1 z2) (add_ z1' z2')
+as \z1 z1' r1 z2 z2' r2 ->
+     trans4 Nat
+                (add (add (z1#fst) (z2#fst)) (add (z1'#snd) (z2'#snd)))
+       (* = *)  (add (add (z1#fst) (z1'#snd)) (add (z2#fst) (z2'#snd)))  (interchange (z1#fst) (z2#fst) (z1'#snd) (z2'#snd))
+       (* = *)  (add (add (z1'#fst) (z1#snd)) (add (z2#fst) (z2'#snd)))  (f_equal (\x -> add x (add (z2#fst) (z2'#snd))) (add (z1#fst) (z1'#snd)) (add (z1'#fst) (z1#snd)) r1)
+       (* = *)  (add (add (z1'#fst) (z1#snd)) (add (z2'#fst) (z2#snd)))  (f_equal (\x -> add (add (z1'#fst) (z1#snd)) x) (add (z2#fst) (z2'#snd)) (add (z2'#fst) (z2#snd)) r2)
+       (* = *)  (add (add (z1'#fst) (z2'#fst)) (add (z1#snd) (z2#snd)))  (interchange (z1'#fst) (z1#snd) (z2'#fst) (z2#snd))
+

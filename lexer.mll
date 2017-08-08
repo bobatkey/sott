@@ -5,7 +5,7 @@ open Parser
 
 let white   = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
-let id      = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let id      = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
 
 rule token = parse
 | white     { token lexbuf }
@@ -28,6 +28,10 @@ rule token = parse
 | "Bool"    { BOOL }
 | "True"    { TRUE }
 | "False"   { FALSE }
+| "Nat"     { NAT }
+| "Zero"    { ZERO }
+| "Succ"    { SUCC }
+| "#recursion" { HASH_RECURSION }
 | "by_cases" { BY_CASES }
 | "for"     { FOR }
 | "refl"    { REFL }
