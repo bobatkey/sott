@@ -22,7 +22,7 @@ as
 
 define coh_test :
   (A : Set)(B : Set)(x : A)(p : [A = B]) -> [x : A = coerce(x,A,B,p) : B]
-as \A B x p -> coherence
+as \A B x p -> coherence(p)
   (* introduce A B x p, conclude [x : A = coerce(x,A,B,p) : B] by coherence. *)
 
 

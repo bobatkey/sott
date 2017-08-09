@@ -43,4 +43,4 @@ as refl
 
 define coherence_test :
   (A:Set)(B:Set)(e : [A = B])(a : A) -> [a : A = coerce(a,A,B,e) : B]
-as \A B e a -> coherence
+as \A B e a -> coherence(e)
