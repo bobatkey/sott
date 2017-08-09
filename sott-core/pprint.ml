@@ -10,19 +10,24 @@ module NameContext = struct
     nm, NameSet.add nm t
 end
 
-module Scope = Scoping.Close (NameContext)
+module Scope = struct
+  include Scoping.Close (NameContext)
+  let close = close ()
+  let close2 = close2 () (fun _ -> ())
+  let close3 = close3 () (fun _ -> ()) (fun _ _ -> ())
+end
 
 let rec pp_term ctxt fmt tm =
   match tm.term_data with
     | Lam term ->
-       let nm, tm, ctxt = Scope.close () term ctxt in
+       let nm, tm, ctxt = Scope.close term ctxt in
        Format.fprintf fmt
          "\\%s -> %a"
          nm
          (pp_term ctxt) tm
 
     | Pi (s, t) ->
-       let nm, t, t_ctxt = Scope.close () t ctxt in
+       let nm, t, t_ctxt = Scope.close t ctxt in
        Format.fprintf fmt
          "(%s : %a) -> %a"
          nm
@@ -35,7 +40,7 @@ let rec pp_term ctxt fmt tm =
 and pp_sigma_term ctxt fmt tm =
   match tm.term_data with
     | Sigma (s, t) ->
-       let nm, t, t_ctxt = Scope.close () t ctxt in
+       let nm, t, t_ctxt = Scope.close t ctxt in
        Format.fprintf fmt
          "(%s : %a) * %a"
          nm
@@ -108,7 +113,7 @@ and pp_base_term ctxt fmt tm =
          (pp_term ctxt) t2
 
     | Subst { ty_s; ty_t; tm_x; tm_y; tm_e } ->
-       let nm, ty_t, ty_ctxt = Scope.close () ty_t ctxt in
+       let nm, ty_t, ty_ctxt = Scope.close ty_t ctxt in
        Format.fprintf fmt
          "subst(@[<hv>%a,@,%s. %a,@,%a,@,%a,@,%a@])"
          (pp_term ctxt) ty_s
@@ -123,9 +128,7 @@ and pp_base_term ctxt fmt tm =
        Format.fprintf fmt "coherence(%a)"
          (pp_term ctxt) prf
     | Funext prf ->
-       let x1, x2, xe, prf, ctxt =
-         Scope.close3 () (fun _ -> ()) (fun _ _ -> ()) prf ctxt
-       in
+       let x1, x2, xe, prf, ctxt = Scope.close3 prf ctxt in
        Format.fprintf fmt "funext(%s %s %s. %a)" x1 x2 xe (pp_term ctxt) prf
     | SameClass prf ->
        Format.fprintf fmt "same-class(%a)"
@@ -161,7 +164,7 @@ and pp_elims ctxt fmt (head, elims) =
          (pp_elims ctxt)     (head, elims)
          (pp_base_term ctxt) tm
     | If (elims, ty, tm_t, tm_f) ->
-       let nm, ty, ty_ctxt = Scope.close () ty ctxt in
+       let nm, ty, ty_ctxt = Scope.close ty ctxt in
        Format.fprintf fmt
          "%a @[<hv>by_cases for %s. %a@,{ True -> %a@,; False -> %a }@]"
          (pp_elims ctxt)     (head, elims)
@@ -178,10 +181,8 @@ and pp_elims ctxt fmt (head, elims) =
          "%a #snd"
          (pp_elims ctxt) (head, elims)
     | ElimNat (elims, ty, tm_z, tm_s) ->
-       let ty_nm, ty, ty_ctxt = Scope.close () ty ctxt in
-       let s_nm1, s_nm2, tm_s, s_ctxt =
-         Scope.close2 () (fun _ -> ()) tm_s ctxt
-       in
+       let ty_nm, ty, ty_ctxt = Scope.close ty ctxt in
+       let s_nm1, s_nm2, tm_s, s_ctxt = Scope.close2 tm_s ctxt in
        Format.fprintf fmt
          "%a @[<hv>#recursion for %s. %a@,{ Zero -> %a@,; Succ %s %s -> %a }@]"
          (pp_elims ctxt)    (head, elims)
@@ -191,12 +192,9 @@ and pp_elims ctxt fmt (head, elims) =
          s_nm1 s_nm2
          (pp_term s_ctxt)   tm_s
     | ElimQ (elims, ty, tm, eq) ->
-       let ty_nm, ty, ty_ctxt = Scope.close () ty ctxt in
-       let tm_nm, tm, tm_ctxt = Scope.close () tm ctxt in
-       let eq_nm1, eq_nm2, eq_nm3, eq, eq_ctxt =
-         Scope.close3 () (fun _ -> ()) (fun _ _ -> ())
-           eq ctxt
-       in
+       let ty_nm, ty, ty_ctxt = Scope.close ty ctxt in
+       let tm_nm, tm, tm_ctxt = Scope.close tm ctxt in
+       let eq_nm1, eq_nm2, eq_nm3, eq, eq_ctxt = Scope.close3 eq ctxt in
        Format.fprintf fmt
          "%a @[<hv>#elimq for %s. %a@,{ [%s] -> %a@,; %s %s %s -> %a }@]"
          (pp_elims ctxt)    (head, elims)
