@@ -1,12 +1,3 @@
-(*
-   plan:
-
-   - read in the declarations
-   - for each decl, check the type, check the term, if OK, then add to current context
-   - if error: report and stop
-
-*)
-
 let pp_msg fmt = function
   | `Type_mismatch (loc, ty1, ty2) ->
      Format.fprintf fmt "type mismatch at %a: %a is not equal to %a"

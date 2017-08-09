@@ -2,4 +2,4 @@
 
 (executable
  ((name sott)
-  (libraries (sottCore))))
+  (libraries (sottCore cmdliner))))
