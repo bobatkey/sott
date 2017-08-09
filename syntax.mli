@@ -76,6 +76,14 @@ and elims_data =
   | ElimQ   of elims * term binder * term binder * term binder binder binder
 
 
+module type EXTENDABLE_CONTEXT = sig
+  type t
+
+  type value
+
+  val extend : string -> value -> t -> string * t
+end
+
 module Scoping : sig
   val bind : string -> term -> term binder
 
@@ -84,6 +92,29 @@ module Scoping : sig
   val bind3 : string -> string -> string -> term -> term binder binder binder
 
   val bind_anon : term -> term binder
+
+  module Close (Ctxt : EXTENDABLE_CONTEXT) : sig
+    val close :
+      Ctxt.value ->
+      term binder ->
+      Ctxt.t ->
+      string * term * Ctxt.t
+
+    val close2 :
+      Ctxt.value ->
+      (string -> Ctxt.value) ->
+      term binder binder ->
+      Ctxt.t ->
+      string * string * term * Ctxt.t
+
+    val close3 :
+      Ctxt.value ->
+      (string -> Ctxt.value) ->
+      (string -> string -> Ctxt.value) ->
+      term binder binder binder ->
+      Ctxt.t ->
+      string * string * string * term * Ctxt.t
+  end
 end
 
 (** Internal representation of checked terms *)

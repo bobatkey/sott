@@ -9,8 +9,10 @@
 
 let pp_msg fmt = function
   | `Type_mismatch (loc, ty1, ty2) ->
-     Format.fprintf fmt "type mismatch at %a"
+     Format.fprintf fmt "type mismatch at %a: %a is not equal to %a"
        Location.pp_without_filename loc
+       Pprint.pp_term  ty1
+       Pprint.pp_term  ty2
   | `VarNotFound (loc, nm)  ->
      Format.fprintf fmt "Variable '%s' not in scope at %a"
        nm
