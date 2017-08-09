@@ -300,7 +300,7 @@ end = struct
              term_data = Coh (traverse_term j prf)
          }
       | {term_data = Irrel} ->
-         failwith "internal error: attempt to bind in an erased proof term"
+         failwith "internal error: attempt to traverse an erased proof term"
 
     and traverse_head j = function
       | { head_data = Bound i } as h ->
