@@ -22,14 +22,14 @@ let rec pp_term ctxt fmt tm =
     | Lam term ->
        let nm, tm, ctxt = Scope.close term ctxt in
        Format.fprintf fmt
-         "\\%s -> %a"
+         "@[<hv>\\%s ->@ %a@]"
          nm
          (pp_term ctxt) tm
 
     | Pi (s, t) ->
        let nm, t, t_ctxt = Scope.close t ctxt in
        Format.fprintf fmt
-         "(%s : %a) -> %a"
+         "@[<hv>(%s : %a) ->@ %a@]"
          nm
          (pp_term ctxt) s
          (pp_term t_ctxt) t
@@ -69,7 +69,9 @@ and pp_app_term ctxt fmt tm =
          (pp_base_term ctxt) tm
 
     | Neutral (h, elims) when elims.elims_data <> Nil ->
-       pp_elims ctxt fmt (h, elims)
+       Format.fprintf fmt
+         "@[<hov 2>%a@]"
+         (pp_elims ctxt) (h, elims)
 
     | _ ->
        pp_base_term ctxt fmt tm
@@ -95,7 +97,7 @@ and pp_base_term ctxt fmt tm =
          (pp_term ctxt) t2
     | TmEq { tm1; ty1; tm2; ty2 } ->
        Format.fprintf fmt
-         "[%a : %a = %a : %a]"
+         "[@[@[%a :@ %a@] =@ @[%a :@ %a@]]@]"
          (pp_term ctxt) tm1
          (pp_term ctxt) ty1
          (pp_term ctxt) tm2
@@ -106,6 +108,7 @@ and pp_base_term ctxt fmt tm =
          (pp_term ctxt) tm
     | Neutral (h, {elims_data=Nil}) ->
        pp_head ctxt fmt h
+         
     | Pair (t1, t2) ->
        Format.fprintf fmt
          "(%a, %a)"
@@ -115,7 +118,7 @@ and pp_base_term ctxt fmt tm =
     | Subst { ty_s; ty_t; tm_x; tm_y; tm_e } ->
        let nm, ty_t, ty_ctxt = Scope.close ty_t ctxt in
        Format.fprintf fmt
-         "subst(@[<hv>%a,@,%s. %a,@,%a,@,%a,@,%a@])"
+         "subst(@[%a,@,%s. %a,@,%a,@,%a,@,%a@])"
          (pp_term ctxt) ty_s
          nm
          (pp_term ty_ctxt) ty_t
@@ -137,7 +140,7 @@ and pp_base_term ctxt fmt tm =
        Format.pp_print_string fmt "<irrel>"
     | _ ->
        Format.fprintf fmt
-         "(%a)"
+         "@[(%a)@]"
          (pp_term ctxt) tm
 
 and pp_head ctxt fmt head =
@@ -148,7 +151,7 @@ and pp_head ctxt fmt head =
        Format.pp_print_string fmt nm
     | Coerce { coercee; src_type; tgt_type; eq_proof } ->
        Format.fprintf fmt
-         "coerce(%a, %a, %a, %a)"
+         "coerce(@[%a,@ %a,@ %a,@ %a@])"
          (pp_term ctxt) coercee
          (pp_term ctxt) src_type
          (pp_term ctxt) tgt_type
@@ -166,7 +169,7 @@ and pp_elims ctxt fmt (head, elims) =
     | If (elims, ty, tm_t, tm_f) ->
        let nm, ty, ty_ctxt = Scope.close ty ctxt in
        Format.fprintf fmt
-         "%a @[<hv>by_cases for %s. %a@,{ True -> %a@,; False -> %a }@]"
+         "%a@ @[<hv>@[<hv 2>by_cases@ for %s. %a@]@,{ True -> %a@,; False -> %a }@]"
          (pp_elims ctxt)     (head, elims)
          nm
          (pp_term ty_ctxt)   ty
@@ -174,17 +177,17 @@ and pp_elims ctxt fmt (head, elims) =
          (pp_term ctxt)      tm_f
     | Project (elims, `fst) ->
        Format.fprintf fmt
-         "%a #fst"
+         "%a@ #fst"
          (pp_elims ctxt) (head, elims)
     | Project (elims, `snd) ->
        Format.fprintf fmt
-         "%a #snd"
+         "%a@ #snd"
          (pp_elims ctxt) (head, elims)
     | ElimNat (elims, ty, tm_z, tm_s) ->
        let ty_nm, ty, ty_ctxt = Scope.close ty ctxt in
        let s_nm1, s_nm2, tm_s, s_ctxt = Scope.close2 tm_s ctxt in
        Format.fprintf fmt
-         "%a @[<hv>#recursion for %s. %a@,{ Zero -> %a@,; Succ %s %s -> %a }@]"
+         "%a@ @[<hv>@[<hv 2>#recursion@ for %s. %a@]@,{ Zero -> %a@,; Succ %s %s -> %a }@]"
          (pp_elims ctxt)    (head, elims)
          ty_nm
          (pp_term ty_ctxt)  ty
@@ -196,7 +199,7 @@ and pp_elims ctxt fmt (head, elims) =
        let tm_nm, tm, tm_ctxt = Scope.close tm ctxt in
        let eq_nm1, eq_nm2, eq_nm3, eq, eq_ctxt = Scope.close3 eq ctxt in
        Format.fprintf fmt
-         "%a @[<hv>#elimq for %s. %a@,{ [%s] -> %a@,; %s %s %s -> %a }@]"
+         "%a@ @[<hv>#elimq for %s. %a@,{ [%s] -> %a@,; %s %s %s -> %a }@]"
          (pp_elims ctxt)    (head, elims)
          ty_nm
          (pp_term ty_ctxt)  ty

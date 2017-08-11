@@ -12,6 +12,11 @@ let typecheck_cmd =
   Term.(const Sott_core.Declarations.process_file $ filename_arg),
   Term.info "typecheck" ~doc ~exits:Term.default_exits
 
+let pprint_cmd =
+  let doc = "Pretty print a .sott file" in
+  Term.(const Sott_core.Declarations.pprint_file $ filename_arg),
+  Term.info "pprint" ~doc ~exits:Term.default_exits
+
 let default_cmd =
   let doc = "Simplified Observational Type Theory" in
   let sdocs = Manpage.s_common_options in
@@ -20,4 +25,5 @@ let default_cmd =
   Term.info "sott" ~version:"v0.0.1" ~doc ~sdocs ~exits
 
 let () =
-  Term.(exit (eval_choice default_cmd [ typecheck_cmd ]))
+  Term.(exit (eval_choice default_cmd [ typecheck_cmd
+                                      ; pprint_cmd ]))
