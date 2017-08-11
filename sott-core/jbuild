@@ -1,8 +1,8 @@
 (jbuild_version 1)
 
 (library
- ((name sottCore)))
-;  (public_name sott-core)))
+ ((name sott_core)
+  (flags (:standard -safe-string))))
 
 (menhir
  ((modules (parser))))

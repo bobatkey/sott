@@ -2,4 +2,5 @@
 
 (executable
  ((name sott)
-  (libraries (sottCore cmdliner))))
+  (libraries (sott_core cmdliner))
+  (flags (:standard -safe-string))))

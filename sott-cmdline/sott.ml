@@ -9,7 +9,7 @@ let filename_arg =
 
 let typecheck_cmd =
   let doc = "Typecheck a .sott file" in
-  Term.(const SottCore.Declarations.process_file $ filename_arg),
+  Term.(const Sott_core.Declarations.process_file $ filename_arg),
   Term.info "typecheck" ~doc ~exits:Term.default_exits
 
 let default_cmd =
