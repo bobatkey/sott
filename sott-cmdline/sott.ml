@@ -17,6 +17,11 @@ let pprint_cmd =
   Term.(const Sott_core.Declarations.pprint_file $ filename_arg),
   Term.info "pprint" ~doc ~exits:Term.default_exits
 
+let html_cmd =
+  let doc = "Render a .sott file to HTML5" in
+  Term.(const Sott_core.Html_gen.of_file $ filename_arg),
+  Term.info "html" ~doc ~exits:Term.default_exits
+
 let default_cmd =
   let doc = "Simplified Observational Type Theory" in
   let sdocs = Manpage.s_common_options in
@@ -26,4 +31,5 @@ let default_cmd =
 
 let () =
   Term.(exit (eval_choice default_cmd [ typecheck_cmd
-                                      ; pprint_cmd ]))
+                                      ; pprint_cmd
+                                      ; html_cmd ]))

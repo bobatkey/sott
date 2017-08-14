@@ -56,12 +56,12 @@ let rec pprint_decls = function
 let process_file filename =
   let ch    = open_in filename in
   let lb    = Lexing.from_channel ch in
-  let decls = Parser.file Lexer.token lb in
+  let decls = Parser.file Lexer.program_token lb in
   process_decls Syntax.Context.empty decls
 
 let pprint_file filename =
   let ch    = open_in filename in
   let lb    = Lexing.from_channel ch in
-  let decls = Parser.file Lexer.token lb in
+  let decls = Parser.file Lexer.program_token lb in
   Format.set_margin 120;
   pprint_decls decls
