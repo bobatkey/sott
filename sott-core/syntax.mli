@@ -120,12 +120,18 @@ end
 (** Internal representation of checked terms *)
 type value
 
+val reify_type : value -> int -> term
+
 module Context : sig
   type t
 
   val empty : t
+
   val extend_with_defn : string -> ty:value -> tm:value -> t -> t
+
   val lookup_exn : string -> t -> value * value option
+
+  val local_bindings : t -> (string * value) list
 end
 
 module Evaluation : sig
@@ -133,7 +139,7 @@ module Evaluation : sig
 end
 
 type error_message =
-  [ `Type_mismatch of Location.t * term * term
+  [ `Type_mismatch of Location.t * Context.t * term * term
   | `VarNotFound of Location.t * string
   | `MsgLoc of Location.t * string
   ]

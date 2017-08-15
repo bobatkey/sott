@@ -1,5 +1,18 @@
+let pp_ctxt fmt bindings =
+  Format.pp_open_vbox fmt 0;
+  bindings |> List.iter begin fun (nm, v) ->
+    Format.fprintf fmt
+      "@[  %s : %a]@,"
+      nm
+      Pprint.pp_term (Syntax.reify_type v 0)
+  end;
+  Format.pp_close_box fmt ()
+
+let pp_failed_type_equation fmt (ctxt, ty1, ty2) =
+  assert false
+
 let pp_msg fmt = function
-  | `Type_mismatch (loc, ty1, ty2) ->
+  | `Type_mismatch (loc, ctxt, ty1, ty2) ->
      Format.fprintf fmt "type mismatch at %a: %a is not equal to %a"
        Location.pp_without_filename loc
        (* FIXME: these are meaningless without the context in which they occur *)

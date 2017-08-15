@@ -715,6 +715,8 @@ module Context : sig
   val lookup_exn : string -> t -> value * value option
 
   val extend_with_defn : string -> ty:value -> tm:value -> t -> t
+
+  val local_bindings : t -> (string * value) list
 end = struct
   module VarMap = Map.Make(String)
 
@@ -776,6 +778,14 @@ end = struct
   let extend_with_defn nm ~ty ~tm ctxt =
     let entry = { entry_type = ty; entry_defn = Some tm } in
     { ctxt with global_entries = VarMap.add nm entry ctxt.global_entries }
+
+  let local_bindings ctxt =
+    List.fold_left
+      (fun bindings nm ->
+         let {entry_type} = VarMap.find nm ctxt.local_entries in
+         (nm, entry_type) :: bindings)
+      []
+      ctxt.local_entry_order
 end
 
 (******************************************************************************)
@@ -875,7 +885,7 @@ end
   
 (******************************************************************************)
 type error_message =
-  [ `Type_mismatch of Location.t * term * term
+  [ `Type_mismatch of Location.t * Context.t * term * term
   | `VarNotFound of Location.t * string
   | `MsgLoc of Location.t * string
   ]
@@ -937,12 +947,12 @@ let rec is_type ctxt = function
 and has_type ctxt ty tm = match ty, tm with
   | ty, { term_data = Neutral (h, elims); term_loc } ->
      synthesise_elims_type ctxt h elims >>= fun ty' ->
-     let ty = reify_type ty 0 in
+     let ty  = reify_type ty 0 in
      let ty' = reify_type ty' 0 in
      if AlphaEquality.equal_term ty ty' then
        Ok ()
      else
-       Error (`Type_mismatch (term_loc, ty, ty'))
+       Error (`Type_mismatch (term_loc, ctxt, ty, ty'))
 
   | V_Pi (s, VB (_, t)), { term_data = Lam tm } ->
      let x, tm, ctxt = ScopeClose.close s tm ctxt in
@@ -1008,13 +1018,15 @@ and has_type ctxt ty tm = match ty, tm with
   | V_QuotType (ty, _), { term_data = QuotIntro tm } ->
      has_type ctxt ty tm
   | V_QuotType (ty, _), { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a member of a quotient type, but isn't"))
-     
+     Error (`MsgLoc (term_loc,
+                     "This term is expected to be a member of a quotient type, but isn't"))
+
   | V_TyEq (ty1, ty2),
     { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }; term_loc } ->
      is_type ctxt ty_s >>= fun () ->
      let ty_s = Evaluation.eval0 ctxt ty_s in
-     (let _, ty_t, ctxt = ScopeClose.close ty_s ty_t ctxt in is_type ctxt ty_t) >>= fun () ->
+     (let _, ty_t, ctxt = ScopeClose.close ty_s ty_t ctxt in is_type ctxt ty_t)
+     >>= fun () ->
      let ty_t = Evaluation.eval1 ctxt ty_t in
      has_type ctxt ty_s tm_x >>= fun () ->
      has_type ctxt ty_s tm_y >>= fun () ->
@@ -1037,7 +1049,8 @@ and has_type ctxt ty tm = match ty, tm with
        Error (`MsgLoc (term_loc, "types not equal in refl"))
 
   | V_TyEq _, { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a type equality, but isn't"))
+     Error (`MsgLoc (term_loc,
+                     "This term is expected to be a proof of a type equality, but isn't"))
 
   | V_TmEq { s; s_ty; t; t_ty }, { term_data = Refl; term_loc } ->
      (* FIXME: "Using 'Refl' as a proof of the equality 'XXX' failed
@@ -1097,7 +1110,9 @@ and has_type ctxt ty tm = match ty, tm with
   | V_TmEq _, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a proof of a term equality, but isn't"))
 
-  | (V_True | V_False | V_Zero | V_Succ _ | V_Lam _ | V_Pair _ | V_QuotIntro _ | V_Irrel | V_Neutral _), _ ->
+  | ( V_True | V_False | V_Zero | V_Succ _
+    | V_Lam _ | V_Pair _ | V_QuotIntro _
+    | V_Irrel | V_Neutral _), _ ->
      failwith "internal error: has_type: attempting to check canonical term aganst non canonical type"
 
 and synthesise_head_type ctxt = function
@@ -1138,10 +1153,10 @@ and synthesise_elims_type ctxt h = function
           Ok (t (Evaluation.eval0 ctxt tm))
        | ty ->
           Error (`MsgLoc (elims_loc, "attempt to apply non function")))
-(*          let loc1 = location_of_neutral h elims in
+(*        let loc1 = location_of_neutral h elims in
           let loc2 = location_of_term tm in
           let ty   = reify_type ty 0 in
-            Error (`BadApplication (loc1, loc2, ty)))*)
+          Error (`BadApplication (loc1, loc2, ty)))*)
 
   | { elims_data = If (elims, elim_ty, tm_t, tm_f); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= function
