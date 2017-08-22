@@ -22,20 +22,47 @@ let rec pp_term ctxt fmt tm =
     | Lam term ->
        let nm, tm, ctxt = Scope.close term ctxt in
        Format.fprintf fmt
-         "@[<hv>\\%s ->@ %a@]"
+         "@[<hv 2>\\%s %a"
          nm
-         (pp_term ctxt) tm
+         (pp_lambdas ctxt) tm
 
     | Pi (s, t) ->
        let nm, t, t_ctxt = Scope.close t ctxt in
        Format.fprintf fmt
-         "@[<hv>(%s : %a) ->@ %a@]"
+         "@[<hv 2>@[<hv>(%s : %a)%a"
          nm
          (pp_term ctxt) s
-         (pp_term t_ctxt) t
+         (pp_pis t_ctxt) t
 
     | _ ->
        pp_sigma_term ctxt fmt tm
+
+and pp_lambdas ctxt fmt tm =
+  match tm.term_data with
+    | Lam term ->
+       let nm, tm, ctxt = Scope.close term ctxt in
+       Format.fprintf fmt
+         "%s %a"
+         nm
+         (pp_lambdas ctxt) tm
+    | _ ->
+       Format.fprintf fmt
+         "->@ %a@]"
+         (pp_term ctxt) tm
+
+and pp_pis ctxt fmt tm =
+  match tm.term_data with
+    | Pi (s, t) ->
+       let nm, t, t_ctxt = Scope.close t ctxt in
+       Format.fprintf fmt
+         "@,(%s : %a)%a"
+         nm
+         (pp_term ctxt) s
+         (pp_pis t_ctxt) t
+    | _ ->
+       Format.fprintf fmt
+         " ->@]@ %a@]"
+         (pp_term ctxt) tm
 
 and pp_sigma_term ctxt fmt tm =
   match tm.term_data with
@@ -108,8 +135,9 @@ and pp_base_term ctxt fmt tm =
          (pp_term ctxt) tm
     | Neutral (h, {elims_data=Nil}) ->
        pp_head ctxt fmt h
-         
+
     | Pair (t1, t2) ->
+       (* FIXME: right nested pairs *)
        Format.fprintf fmt
          "(%a, %a)"
          (pp_term ctxt) t1
@@ -199,7 +227,7 @@ and pp_elims ctxt fmt (head, elims) =
        let tm_nm, tm, tm_ctxt = Scope.close tm ctxt in
        let eq_nm1, eq_nm2, eq_nm3, eq, eq_ctxt = Scope.close3 eq ctxt in
        Format.fprintf fmt
-         "%a@ @[<hv>#elimq for %s. %a@,{ [%s] -> %a@,; %s %s %s -> %a }@]"
+         "%a@ @[<hv>#elimq for %s. %a@,{ @[<hv 3>[%s] ->@ %a@]@,; @[<hv 3>%s %s %s ->@ %a@] }@]"
          (pp_elims ctxt)    (head, elims)
          ty_nm
          (pp_term ty_ctxt)  ty

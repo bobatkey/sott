@@ -43,7 +43,7 @@ let of_file filename =
   in
   html begin
     head begin
-      title "SOTT code"
+      title filename
       ^^
       style
         {|

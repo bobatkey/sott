@@ -76,5 +76,5 @@ let pprint_file filename =
   let ch    = open_in filename in
   let lb    = Lexing.from_channel ch in
   let decls = Parser.file Lexer.program_token lb in
-  Format.set_margin 120;
+  Format.set_margin 80;
   pprint_decls decls
