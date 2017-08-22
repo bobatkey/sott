@@ -166,7 +166,7 @@ and pp_elims ctxt fmt (head, elims) =
          "%a %a"
          (pp_elims ctxt)     (head, elims)
          (pp_base_term ctxt) tm
-    | If (elims, ty, tm_t, tm_f) ->
+    | ElimBool (elims, ty, tm_t, tm_f) ->
        let nm, ty, ty_ctxt = Scope.close ty ctxt in
        Format.fprintf fmt
          "%a@ @[<hv>@[<hv 2>by_cases@ for %s. %a@]@,{ True -> %a@,; False -> %a }@]"

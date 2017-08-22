@@ -68,11 +68,11 @@ and elims =
 
 and elims_data =
   | Nil
-  | App     of elims * term
-  | If      of elims * term binder * term * term
-  | Project of elims * [`fst | `snd]
-  | ElimNat of elims * term binder * term * term binder binder
-  | ElimQ   of elims * term binder * term binder * term binder binder binder
+  | App      of elims * term
+  | Project  of elims * [`fst | `snd]
+  | ElimBool of elims * term binder * term * term
+  | ElimNat  of elims * term binder * term * term binder binder
+  | ElimQ    of elims * term binder * term binder * term binder binder binder
 
 let mk_elim elims_data =
   { elims_data; elims_loc = Location.generated }
@@ -165,8 +165,8 @@ module AlphaEquality = struct
        true
     | App (es, t), App (es', t') ->
        equal_elims es es' && equal_term t t'
-    | If (es, ty, tm_t, tm_f),
-      If (es', ty', tm_t', tm_f') ->
+    | ElimBool (es, ty, tm_t, tm_f),
+      ElimBool (es', ty', tm_t', tm_f') ->
        equal_elims es es' &&
        binder equal_term ty ty' &&
        equal_term tm_t tm_t' &&
@@ -326,12 +326,12 @@ end = struct
          { es with
              elims_data = App (traverse_elims j elims, traverse_term j tm)
          }
-      | { elims_data = If (elims, ty, tm_t, tm_f) } as es ->
+      | { elims_data = ElimBool (elims, ty, tm_t, tm_f) } as es ->
          { es with
-             elims_data = If (traverse_elims j elims,
-                              binder traverse_term j ty,
-                              traverse_term j tm_t,
-                              traverse_term j tm_f)
+             elims_data = ElimBool (traverse_elims j elims,
+                                    binder traverse_term j ty,
+                                    traverse_term j tm_t,
+                                    traverse_term j tm_f)
          }
       | { elims_data = Project (elims, component) } as es ->
          { es with
@@ -643,10 +643,10 @@ and reify_elims h ty es i = match es with
   | E_If (es, VB (x, elim_ty), v_t, v_f) ->
      (match reify_elims h ty es i with
        | es', V_Bool ->
-          mk_elim (If (es',
-                       B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
-                       reify (elim_ty V_True) v_t i,
-                       reify (elim_ty V_False) v_f i)),
+          mk_elim (ElimBool (es',
+                             B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
+                             reify (elim_ty V_True) v_t i,
+                             reify (elim_ty V_False) v_f i)),
           elim_ty (V_Neutral (h, es))
        | _ ->
           failwith "internal error: type error reifying bool case switch")
@@ -850,7 +850,7 @@ end = struct
          scrutinee
       | App (elims, tm) ->
          apply (eval_elims scrutinee elims env) (eval tm env)
-      | If (elims, ty, tm_t, tm_f) ->
+      | ElimBool (elims, ty, tm_t, tm_f) ->
          (match eval_elims scrutinee elims env with
            | V_True  -> eval tm_t env
            | V_False -> eval tm_f env
@@ -1158,7 +1158,7 @@ and synthesise_elims_type ctxt h = function
           let ty   = reify_type ty 0 in
           Error (`BadApplication (loc1, loc2, ty)))*)
 
-  | { elims_data = If (elims, elim_ty, tm_t, tm_f); elims_loc } ->
+  | { elims_data = ElimBool (elims, elim_ty, tm_t, tm_f); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= function
        | V_Bool ->
           (let _, elim_ty, ctxt = ScopeClose.close V_Bool elim_ty ctxt in

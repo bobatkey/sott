@@ -69,11 +69,11 @@ and elims =
 
 and elims_data =
   | Nil
-  | App     of elims * term
-  | If      of elims * term binder * term * term
-  | Project of elims * [`fst | `snd]
-  | ElimNat of elims * term binder * term * term binder binder
-  | ElimQ   of elims * term binder * term binder * term binder binder binder
+  | App      of elims * term
+  | Project  of elims * [`fst | `snd]
+  | ElimBool of elims * term binder * term * term
+  | ElimNat  of elims * term binder * term * term binder binder
+  | ElimQ    of elims * term binder * term binder * term binder binder binder
 
 
 module type EXTENDABLE_CONTEXT = sig

@@ -3,10 +3,10 @@ open Syntax
 
 type elim =
   | Apply    of term * Location.t
+  | Project  of [`fst | `snd] * Location.t
   | ElimBool of term binder * term * term * Location.t
   | ElimNat  of term binder * term * term binder binder * Location.t
   | ElimQ    of term binder * term binder * term binder binder binder * Location.t
-  | Project  of [`fst | `snd] * Location.t
 
 let nil =
   { elims_data = Nil; elims_loc = Location.generated }
@@ -15,7 +15,7 @@ let build_elim elims = function
   | Apply (t, elims_loc) ->
      { elims_data = App (elims, t); elims_loc }
   | ElimBool (ty, tm_t, tm_f, elims_loc) ->
-     { elims_data = If (elims, ty, tm_t, tm_f); elims_loc }
+     { elims_data = ElimBool (elims, ty, tm_t, tm_f); elims_loc }
   | Project (dir, elims_loc) ->
      { elims_data = Project (elims, dir); elims_loc }
   | ElimNat (ty, tm_z, tm_s, elims_loc) ->
