@@ -5,7 +5,8 @@ open Parser
 
 let white   = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
-let id      = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
+let id_cont = ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']
+let id      = ['a'-'z' 'A'-'Z'] id_cont* | ['_'] id_cont+
 
 rule token = parse
 | white        { `Whitespace }
@@ -24,6 +25,7 @@ rule token = parse
 | "->"         { `Token ARROW }
 | ","          { `Token COMMA }
 | "*"          { `Token ASTERISK }
+| '_'          { `Token UNDERSCORE }
 | "\\"         { `Token BACKSLASH }
 | "Bool"       { `Token BOOL }
 | "True"       { `Token TRUE }

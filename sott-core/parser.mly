@@ -28,7 +28,7 @@ let build_elim elims = function
 %token LPAREN LBRACE LSQBRACK
 %token RPAREN RBRACE RSQBRACK
 %token DOT COMMA COLON SEMICOLON EQUALS SLASH
-%token ARROW ASTERISK
+%token ARROW ASTERISK UNDERSCORE
 %token TRUE FALSE BOOL BY_CASES FOR REFL COH SUBST FUNEXT
 %token HASH_FST HASH_SND
 %token NAT ZERO SUCC HASH_RECURSION
@@ -56,8 +56,14 @@ definition:
 whole_term:
   | t=term; EOF { t }
 
+binder:
+  | x=IDENT
+    { Some x }
+  | UNDERSCORE
+    { None }
+
 term:
-  | BACKSLASH; xs=nonempty_list(IDENT); ARROW; t=term
+  | BACKSLASH; xs=nonempty_list(binder); ARROW; t=term
     { List.fold_right
          (fun x t -> { term_data = Lam (Scoping.bind x t)
                      ; term_loc  = Location.generated })
@@ -68,22 +74,22 @@ term:
                              ; term_loc  = Location.generated })
          bs tT }
   | tS=app_term; ARROW; tT=term
-    { { term_data = Pi (tS, Scoping.bind_anon tT)
+    { { term_data = Pi (tS, Scoping.bind None tT)
       ; term_loc  = Location.mk $startpos $endpos } }
   | t=sigma_term
     { t }
 
 pi_binding:
-  | LPAREN; id=IDENT; COLON; tS=term; RPAREN
-    { (id, tS) }
+  | LPAREN; b=binder; COLON; tS=term; RPAREN
+    { (b, tS) }
 
 sigma_term:
-  | LPAREN; id=IDENT; COLON; tS=term; RPAREN; ASTERISK; tT=sigma_term
+  | LPAREN; id=binder; COLON; tS=term; RPAREN; ASTERISK; tT=sigma_term
     { { term_data = Sigma (tS, Scoping.bind id tT)
       ; term_loc  = Location.mk $startpos $endpos
       } }
   | tS=app_term; ASTERISK; tT=sigma_term
-    { { term_data = Sigma (tS, Scoping.bind_anon tT)
+    { { term_data = Sigma (tS, Scoping.bind None tT)
       ; term_loc  = Location.mk $startpos $endpos
       } }
   | t=quottype_term
@@ -115,11 +121,11 @@ base_term:
   | COH; LPAREN; tm_eq=term; RPAREN
     { { term_data = Coh tm_eq
       ; term_loc  = Location.mk $startpos $endpos } }
-  | FUNEXT; LPAREN; x1=IDENT; x2=IDENT; xe=IDENT; DOT; e=term; RPAREN
+  | FUNEXT; LPAREN; x1=binder; x2=binder; xe=binder; DOT; e=term; RPAREN
     { { term_data = Funext (Scoping.bind3 x1 x2 xe e)
       ; term_loc  = Location.mk $startpos $endpos } }
   | SUBST; LPAREN; ty_s=term;
-            COMMA; x=IDENT; DOT; ty_t=term;
+            COMMA; x=binder; DOT; ty_t=term;
             COMMA; tm_x=term;
             COMMA; tm_y=term;
             COMMA; tm_e=term;
@@ -186,7 +192,7 @@ head:
 elim:
   | t=base_term
       { Apply (t, Location.mk $startpos $endpos) }
-  | BY_CASES; FOR; x=IDENT; DOT; ty=term;
+  | BY_CASES; FOR; x=binder; DOT; ty=term;
       LBRACE; TRUE; ARROW; tm_t=term;
    SEMICOLON; FALSE; ARROW; tm_f=term;
       RBRACE
@@ -195,13 +201,13 @@ elim:
       { Project (`fst, Location.mk $startpos $endpos) }
   | HASH_SND
       { Project (`snd, Location.mk $startpos $endpos) }
-  | HASH_RECURSION; FOR; x=IDENT; DOT; ty=term;
+  | HASH_RECURSION; FOR; x=binder; DOT; ty=term;
             LBRACE; ZERO; ARROW; tm_z=term;
-            SEMICOLON SUCC; n=IDENT; p=IDENT; ARROW; tm_s=term;
+            SEMICOLON SUCC; n=binder; p=binder; ARROW; tm_s=term;
             RBRACE
       { ElimNat (Scoping.bind x ty, tm_z, Scoping.bind2 n p tm_s, Location.mk $startpos $endpos) }
-  | HASH_ELIMQ; FOR; x=IDENT; DOT; ty=term;
-       LBRACE; LSQBRACK; a=IDENT; RSQBRACK; ARROW; tm=term
-    SEMICOLON; x1=IDENT; x2=IDENT; xr=IDENT; ARROW; tm_eq=term
+  | HASH_ELIMQ; FOR; x=binder; DOT; ty=term;
+       LBRACE; LSQBRACK; a=binder; RSQBRACK; ARROW; tm=term
+    SEMICOLON; x1=binder; x2=binder; xr=binder; ARROW; tm_eq=term
        RBRACE
       { ElimQ (Scoping.bind x ty, Scoping.bind a tm, Scoping.bind3 x1 x2 xr tm_eq, Location.mk $startpos $endpos) }

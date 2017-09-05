@@ -200,13 +200,11 @@ module type EXTENDABLE_CONTEXT = sig
 end
 
 module Scoping : sig
-  val bind : string -> term -> term binder
+  val bind : string option -> term -> term binder
 
-  val bind2 : string -> string -> term -> term binder binder
+  val bind2 : string option -> string option -> term -> term binder binder
 
-  val bind3 : string -> string -> string -> term -> term binder binder binder
-
-  val bind_anon : term -> term binder
+  val bind3 : string option -> string option -> string option -> term -> term binder binder binder
 
   module Close (Ctxt : EXTENDABLE_CONTEXT) : sig
     val close : Ctxt.value -> term binder -> Ctxt.t -> string * term * Ctxt.t
@@ -359,27 +357,30 @@ end = struct
       ~free:(fun nm j -> Free_global nm)
       ~bound:(fun i j -> if i = j then Free_local x else Bound i)
 
-  let bind_term x =
-    traverse
-      ~free:(fun nm j -> if nm = x then Bound j else Free_global nm)
-      ~bound:(fun i j -> Bound i)
+  let bind_term = function
+    | None -> fun _ t -> t
+    | Some x ->
+       traverse
+         ~free:(fun nm j -> if nm = x then Bound j else Free_global nm)
+         ~bound:(fun i j -> Bound i)
 
+  let ident_of_binder = function
+    | None -> "x"
+    | Some x -> x
+  
   let bind x t =
-    B (x, bind_term x 0 t)
+    B (ident_of_binder x, bind_term x 0 t)
 
   let bind2 x y t =
-    let t1 = B (y, bind_term y 0 t) in
-    let t2 = B (x, binder (bind_term x) 0 t1) in
+    let t1 = B (ident_of_binder y, bind_term y 0 t) in
+    let t2 = B (ident_of_binder x, binder (bind_term x) 0 t1) in
     t2
 
   let bind3 x y z t =
-    let t1 = B (z, bind_term z 0 t) in
-    let t2 = B (y, binder (bind_term y) 0 t1) in
-    let t3 = B (x, binder (binder (bind_term x)) 0 t2) in
+    let t1 = B (ident_of_binder z, bind_term z 0 t) in
+    let t2 = B (ident_of_binder y, binder (bind_term y) 0 t1) in
+    let t3 = B (ident_of_binder x, binder (binder (bind_term x)) 0 t2) in
     t3
-
-  let bind_anon t =
-    B ("x", t)
 
   module Close (Ctxt : EXTENDABLE_CONTEXT) = struct
     let close v (B (nm, tm)) ctxt =

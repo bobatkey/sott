@@ -1,7 +1,7 @@
 define add : Nat -> Nat -> Nat
-as \m n -> m #recursion for x. Nat
+as \m n -> m #recursion for _. Nat
              { Zero     -> n
-             ; Succ n p -> Succ p
+             ; Succ _ p -> Succ p
              }
 
 define two : Nat
@@ -53,7 +53,10 @@ define trans5 :
   (f:A)(p5 : [e : A = f : A]) ->
   [a : A = f : A]
 as \A a b p1 c p2 d p3 e p4 f p5 ->
-     trans A A a b f p1 (trans A A b c f p2 (trans A A c d f p3 (trans A A d e f p4 p5)))
+     trans A A a b f p1
+       (trans A A b c f p2
+         (trans A A c d f p3
+           (trans A A d e f p4 p5)))
 
 define symm :
   (A : Set)(x : A)(y : A)(p : [x : A = y : A]) -> [y : A = x : A]

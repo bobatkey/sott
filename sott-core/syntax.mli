@@ -85,13 +85,11 @@ module type EXTENDABLE_CONTEXT = sig
 end
 
 module Scoping : sig
-  val bind : string -> term -> term binder
+  val bind : string option -> term -> term binder
 
-  val bind2 : string -> string -> term -> term binder binder
+  val bind2 : string option -> string option -> term -> term binder binder
 
-  val bind3 : string -> string -> string -> term -> term binder binder binder
-
-  val bind_anon : term -> term binder
+  val bind3 : string option -> string option -> string option -> term -> term binder binder binder
 
   module Close (Ctxt : EXTENDABLE_CONTEXT) : sig
     val close :

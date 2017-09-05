@@ -13,7 +13,7 @@ let class_of_token = function
      "definitions"
   | LPAREN | RPAREN | LBRACE | RBRACE | LSQBRACK | RSQBRACK
   | EQUALS | COLON | SEMICOLON | DOT | COMMA
-  | ARROW | ASTERISK | BACKSLASH ->
+  | ARROW | ASTERISK | BACKSLASH | UNDERSCORE ->
      "punctuation"
   | IDENT _ ->
      "identifier"
