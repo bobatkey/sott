@@ -1,10 +1,18 @@
 open Syntax
 
-module NameContext = struct
+module NameContext : sig
+  include Syntax.EXTENDABLE_CONTEXT with type value = unit
+
+  val empty : t
+end = struct
   module NameSet = Set.Make (String)
+
   type t = NameSet.t
+
   type value = unit
+
   let empty = NameSet.empty
+
   let extend nm () t =
     let nm = Name_supply.freshen_for (fun nm -> NameSet.mem nm t) nm in
     nm, NameSet.add nm t
@@ -237,4 +245,6 @@ and pp_elims ctxt fmt (head, elims) =
          (pp_term eq_ctxt)  eq
 
 let pp_term fmt tm =
+  (* FIXME: this ought to only work in a context, so we know what
+     names are available. *)
   pp_term NameContext.empty fmt tm
