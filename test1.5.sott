@@ -1,0 +1,21 @@
+define and : Bool -> Bool -> Bool
+as \x y -> x by_cases for y. Bool { True -> y; False -> False }
+
+define eq_funcs :
+  [ \b -> and b False = \b -> False : Bool -> Bool ]
+as funext(b1 b2 b_beq.
+          b1 by_cases for b. [and b False = False : Bool]
+             { True -> refl; False -> refl })
+
+define F : (Bool -> Bool) -> Set
+as \f -> Bool
+
+define hofmann : Bool
+as coerce(True, F (\b -> and b False), F (\b -> False),
+          subst(Bool -> Bool, x. F x,
+                \b -> and b False,
+                \b -> False,
+                eq_funcs))
+
+define test : [hofmann = True : Bool]
+as refl
