@@ -30,7 +30,8 @@ explosion of the sizes of types.
    symmetry; coherence.
 4. [test3.sott] Encoding of sum types via booleans and sigma types;
    demonstration that the counterexample to canonicity involving
-   constructors when adding functional extensionality fails in OTT.
+   constructors when adding functional extensionality fails in OTT
+   [https://coq.inria.fr/cocorico/extensional_equality].
 5. [arith.sott] Construction of and some proofs for the integers
    constructed as a quotient of pairs of natural numbers.
 
