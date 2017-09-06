@@ -20,6 +20,20 @@ explosion of the sizes of types.
 
 `./_build/default/sott-cmdline/sott.exe typecheck <file.sott>`
 
+## Examples
+
+1. [test1.sott] Derivation of `transport` from `coerce`; and a
+   demonstration that Hofmann's counterexample to canonicity in the
+   presence of a functional extensionality axiom fails in OTT.
+2. [test1.5.sott] Shortened version of [test1.sott].
+3. [test2.sott] An equality-proof irrelevance test; transivity and
+   symmetry; coherence.
+4. [test3.sott] Encoding of sum types via booleans and sigma types;
+   demonstration that the counterexample to canonicity involving
+   constructors when adding functional extensionality fails in OTT.
+5. [arith.sott] Construction of and some proofs for the integers
+   constructed as a quotient of pairs of natural numbers.
+
 ## Features
 
 1. Type equalities, written `[A = B]`, where `A` and `B` are proper
