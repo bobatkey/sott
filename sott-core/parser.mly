@@ -161,6 +161,10 @@ base_term:
     RSQBRACK
     { { term_data = TmEq {tm1; ty1; tm2; ty2}
       ; term_loc  = Location.mk $startpos $endpos } }
+  | LSQBRACK; tm1=term; EQUALS; tm2=term; COLON; ty=term;
+    RSQBRACK
+    { { term_data = TmEq {tm1; ty1=ty; tm2; ty2=ty}
+      ; term_loc  = Location.mk $startpos $endpos } }
   | LSQBRACK; t=term; RSQBRACK
     { { term_data = QuotIntro t
       ; term_loc  = Location.mk $startpos $endpos } }
