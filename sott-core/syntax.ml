@@ -194,9 +194,13 @@ end
 module type EXTENDABLE_CONTEXT = sig
   type t
 
-  type value
+  type ty
 
-  val extend : string -> value -> t -> string * t
+  type tm
+
+  val extend : string -> ty -> t -> string * t
+
+  val mk_free : string -> ty -> tm
 end
 
 module Scoping : sig
@@ -207,22 +211,26 @@ module Scoping : sig
   val bind3 : string option -> string option -> string option -> term -> term binder binder binder
 
   module Close (Ctxt : EXTENDABLE_CONTEXT) : sig
-    val close : Ctxt.value -> term binder -> Ctxt.t -> string * term * Ctxt.t
+    val close :
+      Ctxt.ty ->
+      term binder ->
+      Ctxt.t ->
+      Ctxt.tm * term * Ctxt.t
 
     val close2 :
-      Ctxt.value ->
-      (string -> Ctxt.value) ->
+      Ctxt.ty ->
+      (Ctxt.tm -> Ctxt.ty) ->
       term binder binder ->
       Ctxt.t ->
-      string * string * term * Ctxt.t
+      Ctxt.tm * Ctxt.tm * term * Ctxt.t
 
     val close3 :
-      Ctxt.value ->
-      (string -> Ctxt.value) ->
-      (string -> string -> Ctxt.value) ->
+      Ctxt.ty ->
+      (Ctxt.tm -> Ctxt.ty) ->
+      (Ctxt.tm -> Ctxt.tm -> Ctxt.ty) ->
       term binder binder binder ->
       Ctxt.t ->
-      string * string * string * term * Ctxt.t
+      Ctxt.tm * Ctxt.tm * Ctxt.tm * term * Ctxt.t
   end
 end = struct
   let binder k j = function
@@ -383,20 +391,28 @@ end = struct
     t3
 
   module Close (Ctxt : EXTENDABLE_CONTEXT) = struct
-    let close v (B (nm, tm)) ctxt =
-      let nm, ctxt = Ctxt.extend nm v ctxt in
-      nm, close_term nm 0 tm, ctxt
+    let close ty (B (nm, tm)) ctxt =
+      let nm, ctxt = Ctxt.extend nm ty ctxt in
+      Ctxt.mk_free nm ty, close_term nm 0 tm, ctxt
 
-    let close2 v1 v2 (B (nm1, B (nm2, t))) ctxt =
-      let nm1, ctxt = Ctxt.extend nm1 v1 ctxt in
-      let nm2, ctxt = Ctxt.extend nm2 (v2 nm1) ctxt in
-      nm1, nm2, (close_term nm2 0 (close_term nm1 1 t)), ctxt
+    let close2 ty1 ty2 (B (nm1, B (nm2, t))) ctxt =
+      let nm1, ctxt = Ctxt.extend nm1 ty1 ctxt in
+      let x1 = Ctxt.mk_free nm1 ty1 in
+      let ty2 = ty2 x1 in
+      let nm2, ctxt = Ctxt.extend nm2 ty2 ctxt in
+      let x2 = Ctxt.mk_free nm2 ty2 in
+      x1, x2, (close_term nm2 0 (close_term nm1 1 t)), ctxt
 
-    let close3 v1 v2 v3 (B (nm1, B (nm2, B (nm3, t)))) ctxt =
-      let nm1, ctxt = Ctxt.extend nm1 v1 ctxt in
-      let nm2, ctxt = Ctxt.extend nm2 (v2 nm1) ctxt in
-      let nm3, ctxt = Ctxt.extend nm3 (v3 nm1 nm2) ctxt in
-      nm1, nm2, nm3, close_term nm3 0 (close_term nm2 1 (close_term nm1 2 t)), ctxt
+    let close3 ty1 ty2 ty3 (B (nm1, B (nm2, B (nm3, t)))) ctxt =
+      let nm1, ctxt = Ctxt.extend nm1 ty1 ctxt in
+      let x1 = Ctxt.mk_free nm1 ty1 in
+      let ty2 = ty2 x1 in
+      let nm2, ctxt = Ctxt.extend nm2 ty2 ctxt in
+      let x2 = Ctxt.mk_free nm2 ty2 in
+      let ty3 = ty3 x1 x2 in
+      let nm3, ctxt = Ctxt.extend nm3 ty3 ctxt in
+      let x3 = Ctxt.mk_free nm3 ty3 in
+      x1, x2, x3, close_term nm3 0 (close_term nm2 1 (close_term nm1 2 t)), ctxt
   end
 
 end
@@ -703,8 +719,10 @@ let equal_terms tm1 tm2 ty =
 module Context : sig
   type t
 
-  type nonrec value = value
+  type ty = value
 
+  type tm = value
+  
   val empty : t
 
   val extend : string -> value -> t -> string * t
@@ -718,6 +736,8 @@ module Context : sig
   val extend_with_defn : string -> ty:value -> tm:value -> t -> t
 
   val local_bindings : t -> (string * value) list
+
+  val mk_free : string -> value -> value
 end = struct
   module VarMap = Map.Make(String)
 
@@ -732,8 +752,10 @@ end = struct
     ; local_entry_order : string list
     }
 
-  type nonrec value = value
-  
+  type ty = value
+
+  type tm = value
+
   let empty =
     { global_entries = VarMap.empty
     ; local_entries  = VarMap.empty
@@ -787,6 +809,8 @@ end = struct
          (nm, entry_type) :: bindings)
       []
       ctxt.local_entry_order
+
+  let mk_free = free
 end
 
 (******************************************************************************)
@@ -894,8 +918,8 @@ type error_message =
 module ScopeClose = Scoping.Close (Context)
 
 let (>>=) result f = match result with
-  | Ok x           -> f x
-  | Error msg as x -> x
+  | Ok x         -> f x
+  | Error _ as x -> x
 
 let rec is_type ctxt = function
   | { term_data = Set } ->
@@ -957,7 +981,7 @@ and has_type ctxt ty tm = match ty, tm with
 
   | V_Pi (s, VB (_, t)), { term_data = Lam tm } ->
      let x, tm, ctxt = ScopeClose.close s tm ctxt in
-     has_type ctxt (t (free x s)) tm
+     has_type ctxt (t x) tm
 
   | V_Pi _, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a function, but isn't"))
@@ -1073,19 +1097,15 @@ and has_type ctxt ty tm = match ty, tm with
          s1
          (fun _ -> s2)
          (fun x1 x2 ->
-            let x1v = free x1 s1 in
-            let x2v = free x2 s2 in
-            V_TmEq {s=x1v; s_ty=s2; t=x2v; t_ty=s2})
+            V_TmEq {s=x1; s_ty=s2; t=x2; t_ty=s2})
          proof
          ctxt
      in
-     let x1v = free x1 s1 in
-     let x2v = free x2 s2 in
-     let reqd_ty  =
-       V_TmEq { s    = apply tm_f1 x1v
-              ; s_ty = t1 x1v
-              ; t    = apply tm_f2 x2v
-              ; t_ty = t2 x2v
+     let reqd_ty =
+       V_TmEq { s    = apply tm_f1 x1
+              ; s_ty = t1 x1
+              ; t    = apply tm_f2 x2
+              ; t_ty = t2 x2
               }
      in
      has_type ctxt reqd_ty proof
@@ -1183,11 +1203,11 @@ and synthesise_elims_type ctxt h = function
           (let n, _, tm_s, ctxt =
              ScopeClose.close2
                V_Nat
-               (fun n -> ty (free n V_Nat))
+               (fun n -> ty n)
                tm_s
                ctxt
            in
-           has_type ctxt (ty (V_Succ (free n V_Nat))) tm_s) >>= fun () ->
+           has_type ctxt (ty (V_Succ n)) tm_s) >>= fun () ->
           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
        | _ ->
           Error (`MsgLoc (elims_loc, "attempt to eliminate non natural")))
@@ -1200,19 +1220,17 @@ and synthesise_elims_type ctxt h = function
           >>= fun () ->
           let ty = Evaluation.eval1 ctxt elim_ty in
           (let n, tm, ctxt = ScopeClose.close ty_underlying tm ctxt in
-           has_type ctxt (ty (V_QuotIntro (free n ty_underlying))) tm)
+           has_type ctxt (ty (V_QuotIntro n)) tm)
           >>= fun () ->
           let tm = Evaluation.eval1 ctxt tm in
           (let x1, x2, xr, tm_eq, ctxt =
              ScopeClose.close3
                ty_underlying
                (fun _ -> ty_underlying)
-               (fun x1 x2 -> apply (apply r (free x1 ty_underlying)) (free x2 ty_underlying))
+               (fun x1 x2 -> apply (apply r x1) x2)
                tm_eq
                ctxt
            in
-           let x1 = free x1 ty_underlying in
-           let x2 = free x2 ty_underlying in
            has_type ctxt (V_TmEq { s = tm x1; s_ty = ty (V_QuotIntro x1)
                                  ; t = tm x2; t_ty = ty (V_QuotIntro x2) }) tm_eq)
           >>= fun () ->

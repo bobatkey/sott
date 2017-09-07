@@ -79,9 +79,13 @@ and elims_data =
 module type EXTENDABLE_CONTEXT = sig
   type t
 
-  type value
+  type ty
 
-  val extend : string -> value -> t -> string * t
+  type tm
+
+  val extend : string -> ty -> t -> string * t
+
+  val mk_free : string -> ty -> tm
 end
 
 module Scoping : sig
@@ -93,25 +97,25 @@ module Scoping : sig
 
   module Close (Ctxt : EXTENDABLE_CONTEXT) : sig
     val close :
-      Ctxt.value ->
+      Ctxt.ty ->
       term binder ->
       Ctxt.t ->
-      string * term * Ctxt.t
+      Ctxt.tm * term * Ctxt.t
 
     val close2 :
-      Ctxt.value ->
-      (string -> Ctxt.value) ->
+      Ctxt.ty ->
+      (Ctxt.tm -> Ctxt.ty) ->
       term binder binder ->
       Ctxt.t ->
-      string * string * term * Ctxt.t
+      Ctxt.tm * Ctxt.tm * term * Ctxt.t
 
     val close3 :
-      Ctxt.value ->
-      (string -> Ctxt.value) ->
-      (string -> string -> Ctxt.value) ->
+      Ctxt.ty ->
+      (Ctxt.tm -> Ctxt.ty) ->
+      (Ctxt.tm -> Ctxt.tm -> Ctxt.ty) ->
       term binder binder binder ->
       Ctxt.t ->
-      string * string * string * term * Ctxt.t
+      Ctxt.tm * Ctxt.tm * Ctxt.tm * term * Ctxt.t
   end
 end
 

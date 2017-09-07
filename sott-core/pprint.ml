@@ -1,7 +1,7 @@
 open Syntax
 
 module NameContext : sig
-  include Syntax.EXTENDABLE_CONTEXT with type value = unit
+  include Syntax.EXTENDABLE_CONTEXT with type ty = unit and type tm = string
 
   val empty : t
 end = struct
@@ -9,13 +9,17 @@ end = struct
 
   type t = NameSet.t
 
-  type value = unit
+  type ty = unit
+
+  type tm = string
 
   let empty = NameSet.empty
 
-  let extend nm () t =
+  let extend nm _ t =
     let nm = Name_supply.freshen_for (fun nm -> NameSet.mem nm t) nm in
     nm, NameSet.add nm t
+
+  let mk_free nm _ = nm
 end
 
 module Scope = struct
