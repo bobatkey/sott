@@ -1254,7 +1254,7 @@ and synthesise_elims_type ctxt h = function
   | { elims_data = Project (elims, `snd); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= function
        | V_Sigma (s, VB (_, t)) ->
-          Ok (t (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+          Ok (t (vfst (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims))))))
        | V_TyEq (V_Pi (s, VB (x, t)), V_Pi (s', VB (x', t')))
        | V_TyEq (V_Sigma (s, VB (x, t)), V_Sigma (s', VB (x', t'))) ->
           Ok (V_Pi (s, VB (x, fun vs ->
