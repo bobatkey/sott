@@ -110,7 +110,7 @@ module AlphaEquality = struct
        equal_term t1 t2 && equal_term r1 r2
     | QuotIntro t1, QuotIntro t2 ->
        equal_term t1 t2
-  
+
     | Bool, Bool
     | True, True
     | False, False
@@ -317,7 +317,7 @@ end = struct
          h
       | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } as h ->
          { h with
-              head_data = 
+              head_data =
                 Coerce { coercee  = traverse_term j coercee
                        ; src_type = traverse_term j src_type
                        ; tgt_type = traverse_term j tgt_type
@@ -375,7 +375,7 @@ end = struct
   let ident_of_binder = function
     | None -> "x"
     | Some x -> x
-  
+
   let bind x t =
     B (ident_of_binder x, bind_term x 0 t)
 
@@ -722,7 +722,7 @@ module Context : sig
   type ty = value
 
   type tm = value
-  
+
   val empty : t
 
   val extend : string -> value -> t -> string * t
@@ -765,7 +765,7 @@ end = struct
   let taken_of_ctxt ctxt nm =
     VarMap.mem nm ctxt.global_entries
     || VarMap.mem nm ctxt.local_entries
-  
+
   (* FIXME: what if we extend with a name that is already free in the
      term? Need to distinguish free local and free global. *)
   let extend nm entry_type ctxt =
@@ -907,7 +907,7 @@ end = struct
   let eval1 ctxt (B (_, tm)) v =
     evaluate ctxt tm [v]
 end
-  
+
 (******************************************************************************)
 type error_message =
   [ `Type_mismatch of Location.t * Context.t * term * term
@@ -1111,7 +1111,7 @@ and has_type ctxt ty tm = match ty, tm with
      has_type ctxt reqd_ty proof
 
   | V_TmEq {s; s_ty; t; t_ty}, { term_data = Coh prf; term_loc } ->
-     has_type ctxt (V_TyEq (s_ty, t_ty)) prf >>= fun () -> 
+     has_type ctxt (V_TyEq (s_ty, t_ty)) prf >>= fun () ->
      if equal_terms t (coerce s s_ty t_ty) t_ty then
        Ok ()
      else
@@ -1127,7 +1127,7 @@ and has_type ctxt ty tm = match ty, tm with
       else Error (`MsgLoc (term_loc, "relations not equal")))
      >>= fun () ->
      has_type ctxt (apply (apply r1 a1) a2) prf
-     
+
   | V_TmEq _, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a proof of a term equality, but isn't"))
 
