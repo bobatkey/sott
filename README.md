@@ -12,7 +12,7 @@ explosion of the sizes of types.
 
 ## How to build it
 
-1. Install OCaml and `opam` [https://ocaml.org].
+1. Install [OCaml and opam](https://ocaml.org).
 2. `opam install jbuilder cmdliner menhir`
 3. `jbuilder build sott-cmdline/sott.exe`
 
@@ -65,10 +65,10 @@ explosion of the sizes of types.
 
 6. Sigma types `(x : A) * B`, `(x,y)` and `x #fst`, `x #snd`.
 
-7. Booleans: `Bool`, `True`, `False` and `x by_cases for x. T { True
+7. Booleans: `Bool`, `True`, `False` and `x for x. T { True
    -> e1; False -> e2 }`.
 
-8. Natural numbers: `Nat`, `Zero`, `Succ n` and `x #recursion for y. T
+8. Natural numbers: `Nat`, `Zero`, `Succ n` and `x for y. T
    { Zero -> e1; Succ n p -> e2 }`.
    
 9. A Russell-style universe `Set`, which includes equalities,
@@ -77,7 +77,7 @@ explosion of the sizes of types.
 10. Quotient types:
     - Formation: `A / R`, where `A` is a type and `R : A -> A -> Set`
     - Introduction: `[a] : A / R`, where `a : A`
-    - Elimination: `x #elimq for z. T { [z] -> e1; z1 z2 zr -> e2
+    - Elimination: `x for z. T { [z] -> e1; z1 z2 zr -> e2
       }`. The expression `e1` computes the answer, and `e2` is a proof
       that `e1` doesn't depend on the equivalence class.
     - Propositional equality: `same-class(e) : [[a1] : A/R = [a2] :

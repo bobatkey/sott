@@ -209,7 +209,7 @@ and pp_elims ctxt fmt (head, elims) =
     | ElimBool (elims, ty, tm_t, tm_f) ->
        let nm, ty, ty_ctxt = Scope.close ty ctxt in
        Format.fprintf fmt
-         "%a@ @[<hv>@[<hv 2>by_cases@ for %s. %a@]@,{ True -> %a@,; False -> %a }@]"
+         "%a@ @[<hv>@[<hv 2>for %s. %a@]@,{ True -> %a@,; False -> %a }@]"
          (pp_elims ctxt)     (head, elims)
          nm
          (pp_term ty_ctxt)   ty
@@ -227,7 +227,7 @@ and pp_elims ctxt fmt (head, elims) =
        let ty_nm, ty, ty_ctxt = Scope.close ty ctxt in
        let s_nm1, s_nm2, tm_s, s_ctxt = Scope.close2 tm_s ctxt in
        Format.fprintf fmt
-         "%a@ @[<hv>@[<hv 2>#recursion@ for %s. %a@]@,{ Zero -> %a@,; Succ %s %s -> %a }@]"
+         "%a@ @[<hv>@[<hv 2>for %s. %a@]@,{ Zero -> %a@,; Succ %s %s -> %a }@]"
          (pp_elims ctxt)    (head, elims)
          ty_nm
          (pp_term ty_ctxt)  ty
@@ -239,7 +239,7 @@ and pp_elims ctxt fmt (head, elims) =
        let tm_nm, tm, tm_ctxt = Scope.close tm ctxt in
        let eq_nm1, eq_nm2, eq_nm3, eq, eq_ctxt = Scope.close3 eq ctxt in
        Format.fprintf fmt
-         "%a@ @[<hv>#elimq for %s. %a@,{ @[<hv 3>[%s] ->@ %a@]@,; @[<hv 3>%s %s %s ->@ %a@] }@]"
+         "%a@ @[<hv>for %s. %a@,{ @[<hv 3>[%s] ->@ %a@]@,; @[<hv 3>%s %s %s ->@ %a@] }@]"
          (pp_elims ctxt)    (head, elims)
          ty_nm
          (pp_term ty_ctxt)  ty

@@ -1,6 +1,6 @@
 define proof_irrel :
   (A : Set)(B : Set)(p : [A = B])(q : [A = B]) -> [p : [A = B] = q : [A = B]]
-as \A -> \B -> \p -> \q ->
+as \A B p q ->
      refl
 
 define trans :

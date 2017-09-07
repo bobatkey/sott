@@ -1,10 +1,10 @@
 define and : Bool -> Bool -> Bool
-as \x y -> x by_cases for y. Bool { True -> y; False -> False }
+as \x y -> x for y. Bool { True -> y; False -> False }
 
 define eq_funcs :
   [ \b -> and b False = \b -> False : Bool -> Bool ]
 as funext(b1 b2 b_beq.
-          b1 by_cases for b. [and b False = False : Bool]
+          b1 for b. [and b False = False : Bool]
              { True -> refl; False -> refl })
 
 define F : (Bool -> Bool) -> Set

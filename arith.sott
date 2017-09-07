@@ -1,5 +1,5 @@
 define add : Nat -> Nat -> Nat
-as \m n -> m #recursion for _. Nat
+as \m n -> m for _. Nat
              { Zero     -> n
              ; Succ _ p -> Succ p
              }
@@ -76,7 +76,7 @@ as \f x y eq ->
 define add_n_Zero :
   (n : Nat) -> [add n Zero = n : Nat]
 as \n ->
-     n #recursion for n. [add n Zero = n : Nat]
+     n for n. [add n Zero = n : Nat]
        { Zero -> refl
        ; Succ n p -> coerce(refl,
                             [Succ (add n Zero) = Succ (add n Zero) : Nat],
@@ -90,14 +90,14 @@ as \n ->
 define add_Succ :
   (n : Nat)(m : Nat) -> [Succ (add n m) = add n (Succ m) : Nat]
 as \n m ->
-     n#recursion for n. [Succ (add n m) = add n (Succ m) : Nat]
+     n for n. [Succ (add n m) = add n (Succ m) : Nat]
       { Zero     -> refl
       ; Succ n p -> f_equal (\n -> Succ n) (Succ (add n m)) (add n (Succ m)) p }
 
 define add_comm :
   (n : Nat)(m : Nat) -> [add n m : Nat = add m n : Nat]
 as \n m ->
-     n #recursion for n. [add n m : Nat = add m n : Nat]
+     n for n. [add n m : Nat = add m n : Nat]
        { Zero -> symm Nat (add m Zero) m (add_n_Zero m)
        ; Succ n p ->
           trans Nat Nat
@@ -112,7 +112,7 @@ define add_assoc :
   (a : Nat)(b : Nat)(c : Nat) ->
   [add a (add b c) : Nat = add (add a b) c : Nat]
 as \a b c ->
-     a#recursion for a. [add a (add b c) : Nat = add (add a b) c : Nat]
+     a for a. [add a (add b c) : Nat = add (add a b) c : Nat]
       { Zero     -> refl
       ; Succ a p -> f_equal (\n -> Succ n) (add a (add b c)) (add (add a b) c) p
       }
@@ -190,12 +190,12 @@ define zero : Int
 as [zero_]
 
 define negate : Int -> Int
-as \z -> z #elimq for x. Int
+as \z -> z for x. Int
            { [z]      -> [negate_ z]
            ; z1 z2 zr -> same-class (negate_lemma z1 z2 zr) }
 
 define add1 : Int_carrier -> Int -> Int
-as \z1 z2 -> z2#elimq for x. Int
+as \z1 z2 -> z2 for x. Int
                { [z2] -> [add_ z1 z2]
                ; z2 z2' r2 -> same-class (add_lemma z1 z1 refl z2 z2' r2)
                }
@@ -215,14 +215,14 @@ define add1_eq :
   (z1:Int_carrier)(z1':Int_carrier)(z1r:R z1 z1')(z2:Int)  ->
   [ add1 z1 z2 = add1 z1' z2: Int ]
 as \z1 z1' z1r z2 ->
-  z2#elimq for z2. [ add1 z1 z2 = add1 z1' z2 : Int ]
+  z2 for z2. [ add1 z1 z2 = add1 z1' z2 : Int ]
     { [z2] -> same-class (add_lemma z1 z1' z1r z2 z2 refl)
     ; z2 z2' z2r -> coherence(lemma z1 z1' z2 z2' z2r) (* this relies on proof irrelevance for equality proofs *)
     }
 
 
 define add_int : Int -> Int -> Int
-as \z1 z2 -> z1#elimq for x.Int
+as \z1 z2 -> z1 for x.Int
                { [z1] -> add1 z1 z2
                ; z1 z1' r1 -> add1_eq z1 z1' r1 z2 }
 
@@ -237,7 +237,7 @@ as negate one
 
 define inverses :
   (z : Int) -> [ add_int z (negate z) = zero : Int ]
-as \z -> z#elimq for z. [ add_int z (negate z) : Int = zero : Int ]
+as \z -> z for z. [ add_int z (negate z) : Int = zero : Int ]
           { [z] -> same-class(trans Nat Nat
                                  (add (add (z#fst) (z#snd)) Zero)
                                  (add (z#fst) (z#snd))
@@ -252,8 +252,8 @@ define comm :
   (z1:Int)(z2:Int) ->
   [ add_int z1 z2 = add_int z2 z1 : Int]
 as \z1 z2 ->
-     z1#elimq for z1. [add_int z1 z2 = add_int z2 z1 : Int]
-       { [z1] -> z2#elimq for z2. [add_int [z1] z2 = add_int z2 [z1] : Int]
+     z1 for z1. [add_int z1 z2 = add_int z2 z1 : Int]
+       { [z1] -> z2 for z2. [add_int [z1] z2 = add_int z2 [z1] : Int]
                    { [z2] ->
                        same-class(trans Nat Nat
                                      (add (add (z1#fst) (z2#fst)) (add (z2#snd) (z1#snd)))
@@ -269,7 +269,7 @@ as \z1 z2 ->
        }
 
 define F : Int -> Set
-as \z -> (b : Bool) * b by_cases for x.Set { True -> [z = zero : Int]; False -> [z = one : Int ] }
+as \z -> (b : Bool) * b for x.Set { True -> [z = zero : Int]; False -> [z = one : Int ] }
 
 define v : F zero
 as (True, refl)

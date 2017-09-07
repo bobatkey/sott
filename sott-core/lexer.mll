@@ -33,11 +33,8 @@ rule token = parse
 | "Nat"        { `Token NAT }
 | "Zero"       { `Token ZERO }
 | "Succ"       { `Token SUCC }
-| "#recursion" { `Token HASH_RECURSION }
-| "#elimq"     { `Token HASH_ELIMQ }
 | "same-class" { `Token SAME_CLASS }
 | "/"          { `Token SLASH }
-| "by_cases"   { `Token BY_CASES }
 | "for"        { `Token FOR }
 | "refl"       { `Token REFL }
 | "coerce"     { `Token COERCE }

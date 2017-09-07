@@ -29,10 +29,10 @@ let build_elim elims = function
 %token RPAREN RBRACE RSQBRACK
 %token DOT COMMA COLON SEMICOLON EQUALS SLASH
 %token ARROW ASTERISK UNDERSCORE
-%token TRUE FALSE BOOL BY_CASES FOR REFL COH SUBST FUNEXT
+%token TRUE FALSE BOOL FOR REFL COH SUBST FUNEXT
 %token HASH_FST HASH_SND
-%token NAT ZERO SUCC HASH_RECURSION
-%token HASH_ELIMQ SAME_CLASS
+%token NAT ZERO SUCC
+%token SAME_CLASS
 %token SET
 %token DEFINE AS
 %token COERCE
@@ -196,7 +196,7 @@ head:
 elim:
   | t=base_term
       { Apply (t, Location.mk $startpos $endpos) }
-  | BY_CASES; FOR; x=binder; DOT; ty=term;
+  | FOR; x=binder; DOT; ty=term;
       LBRACE; TRUE; ARROW; tm_t=term;
    SEMICOLON; FALSE; ARROW; tm_f=term;
       RBRACE
@@ -205,12 +205,12 @@ elim:
       { Project (`fst, Location.mk $startpos $endpos) }
   | HASH_SND
       { Project (`snd, Location.mk $startpos $endpos) }
-  | HASH_RECURSION; FOR; x=binder; DOT; ty=term;
+  | FOR; x=binder; DOT; ty=term;
             LBRACE; ZERO; ARROW; tm_z=term;
             SEMICOLON SUCC; n=binder; p=binder; ARROW; tm_s=term;
             RBRACE
       { ElimNat (Scoping.bind x ty, tm_z, Scoping.bind2 n p tm_s, Location.mk $startpos $endpos) }
-  | HASH_ELIMQ; FOR; x=binder; DOT; ty=term;
+  | FOR; x=binder; DOT; ty=term;
        LBRACE; LSQBRACK; a=binder; RSQBRACK; ARROW; tm=term
     SEMICOLON; x1=binder; x2=binder; xr=binder; ARROW; tm_eq=term
        RBRACE

@@ -7,7 +7,7 @@ let class_of_token = function
   | REFL | COH | SUBST | FUNEXT | SAME_CLASS
   | SLASH ->
      "constructor"
-  | BY_CASES | HASH_ELIMQ | HASH_RECURSION | HASH_FST | HASH_SND | COERCE | FOR ->
+  | HASH_FST | HASH_SND | COERCE | FOR ->
      "eliminator"
   | DEFINE | AS ->
      "definitions"

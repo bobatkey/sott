@@ -1,6 +1,6 @@
 define sum :
   Set -> Set -> Set
-as \A B -> (x : Bool) * (x by_cases for x. Set { True -> A; False -> B })
+as \A B -> (x : Bool) * (x for x. Set { True -> A; False -> B })
 
 define inl :
   (A:Set)(B:Set) -> A -> sum A B
@@ -18,7 +18,7 @@ as
 
 define and :
   Bool -> Bool -> Bool
-as \x y -> x by_cases for y. Bool { True -> y; False -> False }
+as \x y -> x for y. Bool { True -> y; False -> False }
 
 (* An easier to use functional extensionality principle *)
 define funext2 :
@@ -35,7 +35,7 @@ define eq_funcs :
   [ \b -> False : Bool -> Bool = \b -> and b False : Bool -> Bool]
 as
   funext2 Bool (\x -> Bool) (\b -> False) (\b -> and b False) 
-    (\b -> b by_cases for b. [False : Bool = and b False : Bool ]
+    (\b -> b for b. [False : Bool = and b False : Bool ]
                 { True -> refl; False -> refl })
 
 define F : (Bool -> Bool) -> Set
