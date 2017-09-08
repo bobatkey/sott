@@ -1,0 +1,6 @@
+define fst : (A:Set)(B:A->Set) -> ((a : A) * B a) -> A
+as introduce A B p, use p#fst
+
+define snd : (A:Set)(B:A->Set)(p:(a : A) * B a) -> B (fst A B p)
+as introduce A B p, use p#snd
+
