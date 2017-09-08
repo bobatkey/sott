@@ -103,9 +103,19 @@ and pp_quottype_term ctxt fmt tm =
 and pp_app_term ctxt fmt tm =
   match tm.term_data with
     | Succ tm ->
-       Format.fprintf fmt
-         "Succ %a"
-         (pp_base_term ctxt) tm
+       let rec count_succs n tm =
+         match tm.term_data with
+           | Zero    -> Some n
+           | Succ tm -> count_succs (n+1) tm
+           | _       -> None
+       in
+       (match count_succs 1 tm with
+         | Some n ->
+            Format.fprintf fmt "%d" n
+         | None ->
+            Format.fprintf fmt
+              "Succ %a"
+              (pp_base_term ctxt) tm)
 
     | Neutral (h, elims) when elims.elims_data <> Nil ->
        Format.fprintf fmt
@@ -128,7 +138,7 @@ and pp_base_term ctxt fmt tm =
     | Nat ->
        Format.fprintf fmt "Nat"
     | Zero ->
-       Format.fprintf fmt "Zero"
+       Format.fprintf fmt "0"
     | TyEq (t1, t2) ->
        Format.fprintf fmt
          "@[[%a@ = %a]@]"
