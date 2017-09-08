@@ -34,14 +34,14 @@ let rec pp_term ctxt fmt tm =
     | Lam term ->
        let nm, tm, ctxt = Scope.close term ctxt in
        Format.fprintf fmt
-         "@[<hv 2>\\%s %a"
+         "@[<v>\\%s %a"
          nm
          (pp_lambdas ctxt) tm
 
     | Pi (s, t) ->
        let nm, t, t_ctxt = Scope.close t ctxt in
        Format.fprintf fmt
-         "@[<hv 2>@[<hv>(%s : %a)%a"
+         "@[<hv>@[<hv>(%s : %a)%a"
          nm
          (pp_term ctxt) s
          (pp_pis t_ctxt) t
@@ -59,7 +59,7 @@ and pp_lambdas ctxt fmt tm =
          (pp_lambdas ctxt) tm
     | _ ->
        Format.fprintf fmt
-         "->@ %a@]"
+         "->@,%a@]"
          (pp_term ctxt) tm
 
 and pp_pis ctxt fmt tm =
@@ -109,7 +109,7 @@ and pp_app_term ctxt fmt tm =
 
     | Neutral (h, elims) when elims.elims_data <> Nil ->
        Format.fprintf fmt
-         "@[<hov 2>%a@]"
+         "@[<v>%a@]"
          (pp_elims ctxt) (h, elims)
 
     | _ ->
@@ -136,7 +136,7 @@ and pp_base_term ctxt fmt tm =
          (pp_term ctxt) t2
     | TmEq { tm1; ty1; tm2; ty2 } ->
        Format.fprintf fmt
-         "[@[@[%a :@ %a@] =@ @[%a :@ %a@]]@]"
+         "[@[@[%a : %a@] =@ @[%a : %a@]]@]"
          (pp_term ctxt) tm1
          (pp_term ctxt) ty1
          (pp_term ctxt) tm2
@@ -203,7 +203,7 @@ and pp_elims ctxt fmt (head, elims) =
        pp_head ctxt fmt head
     | App (elims, tm) ->
        Format.fprintf fmt
-         "%a %a"
+         "@[<hv2>%a@ %a@]"
          (pp_elims ctxt)     (head, elims)
          (pp_base_term ctxt) tm
     | ElimBool (elims, ty, tm_t, tm_f) ->
@@ -217,17 +217,17 @@ and pp_elims ctxt fmt (head, elims) =
          (pp_term ctxt)      tm_f
     | Project (elims, `fst) ->
        Format.fprintf fmt
-         "%a@ #fst"
+         "%a#fst"
          (pp_elims ctxt) (head, elims)
     | Project (elims, `snd) ->
        Format.fprintf fmt
-         "%a@ #snd"
+         "%a#snd"
          (pp_elims ctxt) (head, elims)
     | ElimNat (elims, ty, tm_z, tm_s) ->
        let ty_nm, ty, ty_ctxt = Scope.close ty ctxt in
        let s_nm1, s_nm2, tm_s, s_ctxt = Scope.close2 tm_s ctxt in
        Format.fprintf fmt
-         "%a@ @[<hv>@[<hv 2>for %s. %a@]@,{ Zero -> %a@,; Succ %s %s -> %a }@]"
+         "@[<v 2>%a for %s.@[%a@] {@,@[<v 3>Zero ->@ %a;@]@,@[<v 3>Succ %s %s ->@ %a;@]@]@,}"
          (pp_elims ctxt)    (head, elims)
          ty_nm
          (pp_term ty_ctxt)  ty
@@ -239,7 +239,7 @@ and pp_elims ctxt fmt (head, elims) =
        let tm_nm, tm, tm_ctxt = Scope.close tm ctxt in
        let eq_nm1, eq_nm2, eq_nm3, eq, eq_ctxt = Scope.close3 eq ctxt in
        Format.fprintf fmt
-         "%a@ @[<hv>for %s. %a@,{ @[<hv 3>[%s] ->@ %a@]@,; @[<hv 3>%s %s %s ->@ %a@] }@]"
+         "@[<v 2>%a for %s. %a {@,@[<v 3>[%s] ->@ %a;@]@,@[<v 3>%s %s %s ->@ %a;@]@]@,}"
          (pp_elims ctxt)    (head, elims)
          ty_nm
          (pp_term ty_ctxt)  ty
