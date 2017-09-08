@@ -76,6 +76,8 @@ and elims_data =
   | ElimQ    of elims * term binder * term binder * term binder binder binder
 
 
+val alpha_eq : term -> term -> bool
+
 module type EXTENDABLE_CONTEXT = sig
   type t
 

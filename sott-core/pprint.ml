@@ -134,6 +134,12 @@ and pp_base_term ctxt fmt tm =
          "@[[%a@ = %a]@]"
          (pp_term ctxt) t1
          (pp_term ctxt) t2
+    | TmEq { tm1; ty1; tm2; ty2 } when alpha_eq ty1 ty2 ->
+       Format.fprintf fmt
+         "[@[%a@ = %a@ : %a]@]"
+         (pp_term ctxt) tm1
+         (pp_term ctxt) tm2
+         (pp_term ctxt) ty2
     | TmEq { tm1; ty1; tm2; ty2 } ->
        Format.fprintf fmt
          "[@[@[%a : %a@]@ = @[%a : %a@]]@]"

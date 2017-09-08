@@ -190,6 +190,8 @@ module AlphaEquality = struct
 
 end
 
+let alpha_eq = AlphaEquality.equal_term
+
 (**********************************************************************)
 module type EXTENDABLE_CONTEXT = sig
   type t
