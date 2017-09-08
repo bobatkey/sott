@@ -26,7 +26,7 @@ explosion of the sizes of types.
    and a demonstration that Hofmann's counterexample to canonicity in
    the presence of a functional extensionality axiom fails in OTT.
 2. [test1.5.sott](test1.5.sott) Shortened version of [test1.sott].
-3. [test2.sott] An equality-proof irrelevance test; transivity and
+3. [test2.sott](test2.sott) An equality-proof irrelevance test; transivity and
    symmetry; coherence.
 4. [test3.sott](test3.sott) Encoding of sum types via booleans and
    sigma types; demonstration that the counterexample to canonicity
@@ -38,7 +38,7 @@ explosion of the sizes of types.
 ## Features
 
 1. Type equalities, written `[A = B]`, where `A` and `B` are proper
-   typs. All proofs of the same equality are definitionally equal.
+   types. All proofs of the same equality are definitionally equal.
 
 2. Heterogeneous term equality, written `[a : A = b : B]`, where `A`
    and `B` are types. As a shorthand, if `A` is the same as `B`, then
@@ -60,7 +60,7 @@ explosion of the sizes of types.
 5. Pi types: `(x : A) -> B`, `\x -> e` and `e1 e2`. Function
    extensionality is witnessed by `funext(x1 x2 x_e. XXX) : [f1 : (x :
    A1) -> B1 = f2 : (x : A2) -> B2]`, where `x1 : A1`, `x2 : A2`,
-   `x_e : [x1 : A = x2 : A]` and `XXX : [f1 x1 : B1[x1] = f2 x2 :
+   `x_e : [x1 : A1 = x2 : A2]` and `XXX : [f1 x1 : B1[x1] = f2 x2 :
    B2[x2]]`.
 
 6. Sigma types `(x : A) * B`, `(x,y)` and `x #fst`, `x #snd`.
