@@ -35,6 +35,7 @@ let build_elim elims = function
 %token SAME_CLASS
 %token SET
 %token DEFINE AS
+%token INTRODUCE USE
 %token COERCE
 %token BACKSLASH
 
@@ -64,6 +65,11 @@ binder:
 
 term:
   | BACKSLASH; xs=nonempty_list(binder); ARROW; t=term
+    { List.fold_right
+         (fun x t -> { term_data = Lam (Scoping.bind x t)
+                     ; term_loc  = Location.generated })
+         xs t }
+  | INTRODUCE; xs=nonempty_list(binder); COMMA; t=term
     { List.fold_right
          (fun x t -> { term_data = Lam (Scoping.bind x t)
                      ; term_loc  = Location.generated })
@@ -100,6 +106,8 @@ quottype_term:
     { { term_data = QuotType (ty, r)
       ; term_loc  = Location.mk $startpos $endpos
       } }
+  | USE; t=app_term
+    { t }
   | t=app_term
     { t }
 

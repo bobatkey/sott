@@ -1,8 +1,11 @@
 define add : Nat -> Nat -> Nat
-as \m n -> m for _. Nat
-             { Zero     -> n
-             ; Succ _ p -> Succ p
-             }
+as introduce m n,
+   use m for _. Nat {
+     Zero ->
+       n;
+     Succ m add_m_n ->
+       Succ add_m_n
+   }
 
 define two : Nat
 as Succ (Succ Zero)
@@ -12,15 +15,14 @@ define test :
 as refl
 
 define trans :
-  (A : Set)(B : Set)
-  (a : A)(b : B)(c : B) ->
-  [a : A = b : B] ->
-  [b : B = c : B] ->
-  [a : A = c : B]
-as
-  \A B a b c p q ->
-    coerce(p,[a : A = b : B],[a : A = c : B],
-           subst(B,z.[a : A = z : B],b,c,q))
+  (A : Set)
+  (a : A)(b : A)(c : A) ->
+  [a = b : A] ->
+  [b = c : A] ->
+  [a = c : A]
+as introduce A a b c p q,
+   coerce(p,[a = b : A],[a = c : A],
+          subst(A,z.[a = z : A],b,c,q))
 
 define chain3 :
   (A:Set)
@@ -29,8 +31,8 @@ define chain3 :
   (c:A)(p2 : [b = c : A])
   (d:A)(p3 : [c = d : A]) ->
   [a = d : A]
-as \A a b p1 c p2 d p3 ->
-     trans A A a b d p1 (trans A A b c d p2 p3)
+as introduce A a b p1 c p2 d p3,
+   trans A a b d p1 (trans A b c d p2 p3)
 
 define chain4 :
   (A:Set)
@@ -40,8 +42,8 @@ define chain4 :
   (d:A)(p3 : [c = d : A])
   (e:A)(p4 : [d = e : A]) ->
   [a = e : A]
-as \A a b p1 c p2 d p3 e p4 ->
-     trans A A a b e p1 (trans A A b c e p2 (trans A A c d e p3 p4))
+as introduce A a b p1 c p2 d p3 e p4,
+   trans A a b e p1 (chain3 A b c p2 d p3 e p4)
 
 define chain5 :
   (A:Set)
@@ -52,76 +54,74 @@ define chain5 :
   (e:A)(p4 : [d = e : A])
   (f:A)(p5 : [e = f : A]) ->
   [a = f : A]
-as \A a b p1 c p2 d p3 e p4 f p5 ->
-     trans A A a b f p1
-       (trans A A b c f p2
-         (trans A A c d f p3
-           (trans A A d e f p4 p5)))
+as introduce A a b p1 c p2 d p3 e p4 f p5,
+   trans A a b f p1
+     (trans A b c f p2
+       (trans A c d f p3
+         (trans A d e f p4 p5)))
 
 define symm :
   (A : Set)(x : A)(y : A) -> [x = y : A] -> [y = x : A]
-as
-  \A x y p ->
-     coerce(refl,[x : A = x : A],[y : A = x : A],
-            subst(A,z.[z : A = x : A],x,y,p))
+as introduce A x y p,
+   coerce(refl,[x : A = x : A],[y : A = x : A],
+          subst(A,z.[z : A = x : A],x,y,p))
 
 define f_equal :
   (f : Nat -> Nat)(x:Nat)(y:Nat) ->
   [x = y : Nat] ->
   [f x = f y : Nat]
-as \f x y eq ->
-      coerce(refl,[f x = f x : Nat],[f x = f y : Nat],
-             subst(Nat,z.[f x = f z : Nat],x,y,eq))
+as introduce f x y eq,
+   coerce(refl,[f x = f x : Nat],[f x = f y : Nat],
+          subst(Nat,z.[f x = f z : Nat],x,y,eq))
 
 define add_n_Zero :
   (n : Nat) -> [add n Zero = n : Nat]
-as \n ->
-     n for n. [add n Zero = n : Nat]
-       { Zero -> refl
-       ; Succ n p -> coerce(refl,
-                            [Succ (add n Zero) = Succ (add n Zero) : Nat],
-                            [Succ (add n Zero) = Succ n : Nat],
-                            subst(Nat,x.[Succ (add n Zero) = Succ x : Nat],
-                                  add n Zero,
-                                  n,
-                                  p))
-       }
+as introduce n,
+   use n for n. [add n Zero = n : Nat] {
+     Zero ->
+       refl;
+     Succ n p ->
+       f_equal (\n -> Succ n) (add n Zero) n p
+   }
 
 define add_Succ :
   (n : Nat)(m : Nat) -> [Succ (add n m) = add n (Succ m) : Nat]
-as \n m ->
-     n for n. [Succ (add n m) = add n (Succ m) : Nat]
-      { Zero     -> refl
-      ; Succ n p -> f_equal (\n -> Succ n) (Succ (add n m)) (add n (Succ m)) p }
+as introduce n m,
+   use n for n. [Succ (add n m) = add n (Succ m) : Nat] {
+     Zero     -> refl;
+     Succ n p -> f_equal (\n -> Succ n) (Succ (add n m)) (add n (Succ m)) p
+   }
 
 define add_comm :
   (n : Nat)(m : Nat) -> [add n m : Nat = add m n : Nat]
-as \n m ->
-     n for n. [add n m : Nat = add m n : Nat]
-       { Zero -> symm Nat (add m Zero) m (add_n_Zero m)
-       ; Succ n p ->
-          trans Nat Nat
-            (Succ (add n m))
-            (Succ (add m n))
-            (add m (Succ n))
-            (f_equal (\n -> Succ n) (add n m) (add m n) p)
-            (add_Succ m n)
-       }
+as introduce n m,
+   use n for n. [add n m : Nat = add m n : Nat] {
+     Zero -> symm Nat (add m Zero) m (add_n_Zero m);
+     Succ n p ->
+       trans Nat
+          (Succ (add n m))
+          (Succ (add m n))
+          (add m (Succ n))
+          (f_equal (\n -> Succ n) (add n m) (add m n) p)
+          (add_Succ m n)
+   }
 
 define add_assoc :
   (a : Nat)(b : Nat)(c : Nat) ->
   [add a (add b c) : Nat = add (add a b) c : Nat]
-as \a b c ->
-     a for a. [add a (add b c) : Nat = add (add a b) c : Nat]
-      { Zero     -> refl
-      ; Succ a p -> f_equal (\n -> Succ n) (add a (add b c)) (add (add a b) c) p
-      }
+as introduce a b c,
+   use a for a. [add a (add b c) : Nat = add (add a b) c : Nat] {
+     Zero ->
+       refl;
+     Succ a p ->
+       f_equal (\n -> Succ n) (add a (add b c)) (add (add a b) c) p
+   }
 
 define add_assoc_inv :
   (a : Nat)(b : Nat)(c : Nat) ->
   [add (add a b) c  = add a (add b c) : Nat]
-as \a b c ->
-     symm Nat (add a (add b c)) (add (add a b) c) (add_assoc a b c)
+as introduce a b c,
+   symm Nat (add a (add b c)) (add (add a b) c) (add_assoc a b c)
 
 define add_Zero_n :
   (n : Nat) -> [add Zero n = n : Nat]
@@ -155,32 +155,32 @@ as \z1 z2 r ->
 define interchange :
   (a:Nat)(b:Nat)(c:Nat)(d:Nat) ->
   [add (add a b) (add c d) = add (add a c) (add b d) : Nat]
-as \a b c d ->
-     chain5 Nat
-                (add (add a b) (add c d))
-       (* = *)  (add a (add b (add c d)))   (add_assoc_inv a b (add c d))
-       (* = *)  (add a (add (add b c) d))   (f_equal (\x -> add a x)
-                                                     (add b (add c d)) (add (add b c) d)
-                                                     (add_assoc b c d))
-       (* = *)  (add a (add (add c b) d))   (f_equal (\x -> add a (add x d))
-                                                     (add b c) (add c b)
-                                                     (add_comm b c))
-       (* = *)  (add a (add c (add b d)))   (f_equal (\x -> add a x)
-                                                     (add (add c b) d) (add c (add b d))
-                                                     (add_assoc_inv c b d))
-       (* = *)  (add (add a c) (add b d))   (add_assoc a c (add b d))
+as introduce a b c d,
+   chain5 Nat
+            (add (add a b) (add c d))
+   (* = *)  (add a (add b (add c d)))   (add_assoc_inv a b (add c d))
+   (* = *)  (add a (add (add b c) d))   (f_equal (\x -> add a x)
+                                                 (add b (add c d)) (add (add b c) d)
+                                                 (add_assoc b c d))
+   (* = *)  (add a (add (add c b) d))   (f_equal (\x -> add a (add x d))
+                                                 (add b c) (add c b)
+                                                 (add_comm b c))
+   (* = *)  (add a (add c (add b d)))   (f_equal (\x -> add a x)
+                                                 (add (add c b) d) (add c (add b d))
+                                                 (add_assoc_inv c b d))
+   (* = *)  (add (add a c) (add b d))   (add_assoc a c (add b d))
 
 define add_lemma :
   (z1 : Int_carrier)(z1' : Int_carrier)(r1 : R z1 z1')
   (z2 : Int_carrier)(z2' : Int_carrier)(r2 : R z2 z2') ->
   R (add_ z1 z2) (add_ z1' z2')
-as \z1 z1' r1 z2 z2' r2 ->
-     chain4 Nat
-                (add (add (z1#fst) (z2#fst)) (add (z1'#snd) (z2'#snd)))
-       (* = *)  (add (add (z1#fst) (z1'#snd)) (add (z2#fst) (z2'#snd)))  (interchange (z1#fst) (z2#fst) (z1'#snd) (z2'#snd))
-       (* = *)  (add (add (z1'#fst) (z1#snd)) (add (z2#fst) (z2'#snd)))  (f_equal (\x -> add x (add (z2#fst) (z2'#snd))) (add (z1#fst) (z1'#snd)) (add (z1'#fst) (z1#snd)) r1)
-       (* = *)  (add (add (z1'#fst) (z1#snd)) (add (z2'#fst) (z2#snd)))  (f_equal (\x -> add (add (z1'#fst) (z1#snd)) x) (add (z2#fst) (z2'#snd)) (add (z2'#fst) (z2#snd)) r2)
-       (* = *)  (add (add (z1'#fst) (z2'#fst)) (add (z1#snd) (z2#snd)))  (interchange (z1'#fst) (z1#snd) (z2'#fst) (z2#snd))
+as introduce z1 z1' r1 z2 z2' r2,
+   chain4 Nat
+           (add (add (z1#fst) (z2#fst)) (add (z1'#snd) (z2'#snd)))
+   (* = *) (add (add (z1#fst) (z1'#snd)) (add (z2#fst) (z2'#snd))) (interchange (z1#fst) (z2#fst) (z1'#snd) (z2'#snd))
+   (* = *) (add (add (z1'#fst) (z1#snd)) (add (z2#fst) (z2'#snd))) (f_equal (\x -> add x (add (z2#fst) (z2'#snd))) (add (z1#fst) (z1'#snd)) (add (z1'#fst) (z1#snd)) r1)
+   (* = *) (add (add (z1'#fst) (z1#snd)) (add (z2'#fst) (z2#snd))) (f_equal (\x -> add (add (z1'#fst) (z1#snd)) x) (add (z2#fst) (z2'#snd)) (add (z2'#fst) (z2#snd)) r2)
+   (* = *) (add (add (z1'#fst) (z2'#fst)) (add (z1#snd) (z2#snd))) (interchange (z1'#fst) (z1#snd) (z2'#fst) (z2#snd))
 
 
 define Int : Set
@@ -190,15 +190,20 @@ define zero : Int
 as [zero_]
 
 define negate : Int -> Int
-as \z -> z for x. Int
-           { [z]      -> [negate_ z]
-           ; z1 z2 zr -> same-class (negate_lemma z1 z2 zr) }
+as introduce z,
+   use z for x. Int {
+     [z]      -> [negate_ z];
+     z1 z2 zr -> same-class (negate_lemma z1 z2 zr)
+   }
 
 define add1 : Int_carrier -> Int -> Int
-as \z1 z2 -> z2 for x. Int
-               { [z2] -> [add_ z1 z2]
-               ; z2 z2' r2 -> same-class (add_lemma z1 z1 refl z2 z2' r2)
-               }
+as introduce z1 z2,
+   use z2 for x. Int {
+      [z2] ->
+        [add_ z1 z2];
+      z2 z2' r2 ->
+        same-class (add_lemma z1 z1 refl z2 z2' r2)
+   }
 
 define lemma :
   (z1:Int_carrier)(z1':Int_carrier)
@@ -214,17 +219,22 @@ as \z1 z1' z2 z2' z2r ->
 define add1_eq :
   (z1:Int_carrier)(z1':Int_carrier)(z1r:R z1 z1')(z2:Int)  ->
   [ add1 z1 z2 = add1 z1' z2: Int ]
-as \z1 z1' z1r z2 ->
-  z2 for z2. [ add1 z1 z2 = add1 z1' z2 : Int ]
-    { [z2] -> same-class (add_lemma z1 z1' z1r z2 z2 refl)
-    ; z2 z2' z2r -> coherence(lemma z1 z1' z2 z2' z2r) (* this relies on proof irrelevance for equality proofs *)
-    }
+as introduce z1 z1' z1r z2,
+   use z2 for z2. [ add1 z1 z2 = add1 z1' z2 : Int ] {
+     [z2] ->
+       same-class (add_lemma z1 z1' z1r z2 z2 refl);
+     z2 z2' z2r ->
+        (* this relies on proof irrelevance for equality proofs *)
+        coherence(lemma z1 z1' z2 z2' z2r)
+   }
 
 
 define add_int : Int -> Int -> Int
-as \z1 z2 -> z1 for x.Int
-               { [z1] -> add1 z1 z2
-               ; z1 z1' r1 -> add1_eq z1 z1' r1 z2 }
+as introduce z1 z2,
+   use z1 for x.Int {
+      [z1] -> add1 z1 z2;
+      z1 z1' r1 -> add1_eq z1 z1' r1 z2
+   }
 
 define inject : Nat -> Int
 as \n -> [(n, Zero)]
@@ -237,36 +247,41 @@ as negate one
 
 define inverses :
   (z : Int) -> [ add_int z (negate z) = zero : Int ]
-as \z -> z for z. [ add_int z (negate z) : Int = zero : Int ]
-          { [z] -> same-class(trans Nat Nat
-                                 (add (add (z#fst) (z#snd)) Zero)
-                                 (add (z#fst) (z#snd))
-                                 (add (z#snd) (z#fst))
-                                 (add_n_Zero (add (z#fst) (z#snd)))
-                                 (add_comm (z#fst) (z#snd)))
-          ; z1 z2 zr ->
-              coherence(subst(Int, x. [add_int x (negate x) : Int = zero : Int],
-                              [z1], [z2], same-class(zr))) }
+as introduce z,
+   use z for z. [ add_int z (negate z) : Int = zero : Int ] {
+     [z] -> same-class(trans Nat
+                          (add (add (z#fst) (z#snd)) Zero)
+                          (add (z#fst) (z#snd))
+                          (add (z#snd) (z#fst))
+                          (add_n_Zero (add (z#fst) (z#snd)))
+                          (add_comm (z#fst) (z#snd)));
+     z1 z2 zr ->
+        coherence(subst(Int, x. [add_int x (negate x) : Int = zero : Int],
+                        [z1], [z2], same-class(zr)))
+   }
 
 define comm :
   (z1:Int)(z2:Int) ->
   [ add_int z1 z2 = add_int z2 z1 : Int]
-as \z1 z2 ->
-     z1 for z1. [add_int z1 z2 = add_int z2 z1 : Int]
-       { [z1] -> z2 for z2. [add_int [z1] z2 = add_int z2 [z1] : Int]
-                   { [z2] ->
-                       same-class(trans Nat Nat
-                                     (add (add (z1#fst) (z2#fst)) (add (z2#snd) (z1#snd)))
-                                     (add (add (z2#fst) (z1#fst)) (add (z2#snd) (z1#snd)))
-                                     (add (add (z2#fst) (z1#fst)) (add (z1#snd) (z2#snd)))
-                                     (f_equal (\x -> add x (add (z2#snd) (z1#snd))) (add (z1#fst) (z2#fst)) (add (z2#fst) (z1#fst)) (add_comm (z1#fst) (z2#fst)))
-                                     (f_equal (\x -> add (add (z2#fst) (z1#fst)) x) (add (z2#snd) (z1#snd)) (add (z1#snd) (z2#snd)) (add_comm (z2#snd) (z1#snd))))
-                   ; z2 z2' z2r ->
-                       coherence(subst(Int, x. [add_int [z1] x = add_int x [z1] : Int], [z2], [z2'], same-class(z2r))) }
-       ; z1 z1' z1r ->
-           coherence(subst(Int, x.[add_int x z2 = add_int z2 x : Int],
-                           [z1],[z1'],same-class(z1r)))
-       }
+as introduce z1 z2,
+   use z1 for z1. [add_int z1 z2 = add_int z2 z1 : Int] {
+     [z1] ->
+       use z2 for z2. [add_int [z1] z2 = add_int z2 [z1] : Int] {
+         [z2] ->
+           same-class(trans Nat
+                        (add (add (z1#fst) (z2#fst)) (add (z2#snd) (z1#snd)))
+                        (add (add (z2#fst) (z1#fst)) (add (z2#snd) (z1#snd)))
+                        (add (add (z2#fst) (z1#fst)) (add (z1#snd) (z2#snd)))
+                        (f_equal (\x -> add x (add (z2#snd) (z1#snd))) (add (z1#fst) (z2#fst)) (add (z2#fst) (z1#fst)) (add_comm (z1#fst) (z2#fst)))
+                        (f_equal (\x -> add (add (z2#fst) (z1#fst)) x) (add (z2#snd) (z1#snd)) (add (z1#snd) (z2#snd)) (add_comm (z2#snd) (z1#snd))));
+         z2 z2' z2r ->
+           coherence(subst(Int, x. [add_int [z1] x = add_int x [z1] : Int],
+                           [z2], [z2'], same-class(z2r)))
+       };
+     z1 z1' z1r ->
+       coherence(subst(Int, x.[add_int x z2 = add_int z2 x : Int],
+                       [z1],[z1'],same-class(z1r)))
+   }
 
 define F : Int -> Set
 as \z -> (b : Bool) * b for x.Set { True -> [z = zero : Int]; False -> [z = one : Int ] }

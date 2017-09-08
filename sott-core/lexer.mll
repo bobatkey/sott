@@ -43,6 +43,8 @@ rule token = parse
 | "funext"     { `Token FUNEXT }
 | "define"     { `Token DEFINE }
 | "as"         { `Token AS }
+| "use"        { `Token USE }
+| "introduce"  { `Token INTRODUCE }
 | "#fst"       { `Token HASH_FST }
 | "#snd"       { `Token HASH_SND }
 | id           { `Token (IDENT (Lexing.lexeme lexbuf)) }
