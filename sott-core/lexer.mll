@@ -7,6 +7,7 @@ let white   = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let id_cont = ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']
 let id      = ['a'-'z' 'A'-'Z'] id_cont* | ['_'] id_cont+
+let natural = ['0'-'9']+
 
 rule token = parse
 | white        { `Whitespace }
@@ -47,6 +48,7 @@ rule token = parse
 | "introduce"  { `Token INTRODUCE }
 | "#fst"       { `Token HASH_FST }
 | "#snd"       { `Token HASH_SND }
+| natural      { `Token (NATURAL (int_of_string (Lexing.lexeme lexbuf))) }
 | id           { `Token (IDENT (Lexing.lexeme lexbuf)) }
 | "(*"         { comment lexbuf; `Comment }
 | eof          { `Token EOF }

@@ -7,11 +7,8 @@ as introduce m n,
        use Succ add_m_n;
    }
 
-define two : Nat
-as Succ (Succ Zero)
-
 define test :
-  [add two two = Succ (Succ two) : Nat]
+  [add 2 2 = 4 : Nat]
 as refl
 
 define trans :

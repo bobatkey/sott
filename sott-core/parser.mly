@@ -25,6 +25,7 @@ let build_elim elims = function
 %}
 
 %token <string> IDENT
+%token <int> NATURAL
 %token LPAREN LBRACE LSQBRACK
 %token RPAREN RBRACE RSQBRACK
 %token DOT COMMA COLON SEMICOLON EQUALS SLASH
@@ -160,7 +161,14 @@ base_term:
       ; term_loc  = Location.mk $startpos $endpos } }
   | ZERO
     { { term_data = Zero
-      ; term_loc  = Location.mk $startpos $endpos } }  
+      ; term_loc  = Location.mk $startpos $endpos } }
+  | n=NATURAL
+    { let term_loc = Location.mk $startpos $endpos in
+      let rec build_nat n = function
+         | 0 -> n
+         | i -> build_nat { term_data = Succ n; term_loc } (i-1)
+      in
+      build_nat { term_data = Zero; term_loc } n }
   | LSQBRACK; ty1=term; EQUALS; ty2=term; RSQBRACK
     { { term_data = TyEq (ty1, ty2)
       ; term_loc  = Location.mk $startpos $endpos } }
