@@ -635,18 +635,18 @@ and reify_neutral h es i : term = match h with
      let h     = mk_head (Free_global name) in
      mk_term (Neutral (h, es))
   | H_Coe { coercee; src_type; tgt_type } ->
+     let es_tm, ty = reify_elims h tgt_type es i in
      let ty1_tm = reify_type src_type i in
      let ty2_tm = reify_type tgt_type i in
      if AlphaEquality.equal_term ty1_tm ty2_tm then
-       reify src_type (eval_elims coercee es) i
+       reify ty (eval_elims coercee es) i
      else
-       let es, _ = reify_elims h tgt_type es i in
        let h = mk_head (Coerce { coercee  = reify src_type coercee i
                                ; src_type = ty1_tm
                                ; tgt_type = ty2_tm
                                ; eq_proof = mk_term Irrel })
        in
-       mk_term (Neutral (h, es))
+       mk_term (Neutral (h, es_tm))
 
 and reify_elims h ty es i = match es with
   | E_Nil ->
