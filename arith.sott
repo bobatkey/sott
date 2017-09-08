@@ -207,9 +207,9 @@ define lemma :
   (z2:Int_carrier)(z2':Int_carrier)(z2r:R z2 z2') ->
   [ [ add1 z1 [z2] = add1 z1' [z2] : Int]
   = [ add1 z1 [z2'] = add1 z1' [z2'] : Int ] ]
-as \z1 z1' z2 z2' z2r ->
-     subst(Int, x. [ add1 z1 x : Int = add1 z1' x : Int],
-           [z2], [z2'], same-class(z2r))
+as introduce z1 z1' z2 z2' z2r,
+   subst(Int, x. [ add1 z1 x : Int = add1 z1' x : Int],
+         [z2], [z2'], same-class(z2r))
 
 
 
@@ -221,8 +221,8 @@ as introduce z1 z1' z1r z2,
      [z2] ->
        same-class (add_lemma z1 z1' z1r z2 z2 refl);
      z2 z2' z2r ->
-        (* this relies on proof irrelevance for equality proofs *)
-        coherence(lemma z1 z1' z2 z2' z2r)
+       (* this relies on proof irrelevance for equality proofs *)
+       coherence(lemma z1 z1' z2 z2' z2r)
    }
 
 
@@ -242,6 +242,16 @@ as inject (Succ Zero)
 define minus_one : Int
 as negate one
 
+define unit :
+  (z : Int) -> [add_int zero z = z : Int]
+as introduce z,
+   use z for z. [add_int zero z = z : Int] {
+     [z] ->
+       use refl;
+     z z' zr ->
+       use coherence(subst(Int, x. [add_int zero x = x : Int], [z], [z'], same-class(zr)))
+   }
+
 define inverses :
   (z : Int) -> [ add_int z (negate z) = zero : Int ]
 as introduce z,
@@ -259,7 +269,7 @@ as introduce z,
 
 define comm :
   (z1:Int)(z2:Int) ->
-  [ add_int z1 z2 = add_int z2 z1 : Int]
+  [ add_int z1 z2 = add_int z2 z1 : Int ]
 as introduce z1 z2,
    use z1 for z1. [add_int z1 z2 = add_int z2 z1 : Int] {
      [z1] ->
@@ -279,6 +289,43 @@ as introduce z1 z2,
        coherence(subst(Int, x.[add_int x z2 = add_int z2 x : Int],
                        [z1],[z1'],same-class(z1r)));
    }
+
+define assoc :
+  (z1:Int)(z2:Int)(z3:Int) ->
+  [ add_int z1 (add_int z2 z3) = add_int (add_int z1 z2) z3: Int ]
+as introduce z1 z2 z3,
+   use z1 for z1. [ add_int z1 (add_int z2 z3) = add_int (add_int z1 z2) z3: Int ] {
+     [z1] ->
+       use z2 for z2. [ add_int [z1] (add_int z2 z3) = add_int (add_int [z1] z2) z3: Int ] {
+         [z2] ->
+           use z3 for z3. [ add_int [z1] (add_int [z2] z3) = add_int (add_int [z1] [z2]) z3: Int ] {
+             [z3] ->
+               same-class
+                 (trans Nat
+                    (add (add (z1#fst) (add (z2#fst) (z3#fst))) (add (add (z1#snd) (z2#snd)) (z3#snd)))
+                    (add (add (add (z1#fst) (z2#fst)) (z3#fst)) (add (add (z1#snd) (z2#snd)) (z3#snd)))
+                    (add (add (add (z1#fst) (z2#fst)) (z3#fst)) (add (z1#snd) (add (z2#snd) (z3#snd))))
+                    (f_equal (\x -> add x (add (add (z1#snd) (z2#snd)) (z3#snd)))
+                             (add (z1#fst) (add (z2#fst) (z3#fst)))
+                             (add (add (z1#fst) (z2#fst)) (z3#fst))
+                             (add_assoc (z1#fst) (z2#fst) (z3#fst)))
+                    (f_equal (\x -> add (add (add (z1#fst) (z2#fst)) (z3#fst)) x)
+                             (add (add (z1#snd) (z2#snd)) (z3#snd))
+                             (add (z1#snd) (add (z2#snd) (z3#snd)))
+                             (add_assoc_inv (z1#snd) (z2#snd) (z3#snd))));
+             z3 z3' z3r ->
+               coherence(subst(Int, x. [add_int [z1] (add_int [z2] x) = add_int (add_int [z1] [z2]) x : Int],
+                               [z3], [z3'], same-class(z3r)));
+           };
+         z2 z2' z2r ->
+           coherence(subst(Int, x. [add_int [z1] (add_int x z3) = add_int (add_int [z1] x) z3 : Int],
+                           [z2], [z2'], same-class(z2r)));
+       };
+     z1 z1' z1r ->
+       coherence(subst(Int, x. [add_int x (add_int z2 z3) = add_int (add_int x z2) z3 : Int],
+                       [z1], [z1'], same-class(z1r)))
+   }
+
 
 define F : Int -> Set
 as \z -> (b : Bool) * b for x.Set { True  -> [z = zero : Int];
