@@ -12,13 +12,19 @@ let pp_failed_type_equation fmt (ctxt, ty1, ty2) =
   assert false
 
 let pp_msg fmt = function
-  | `Type_mismatch (loc, ctxt, ty1, ty2) ->
-     Format.fprintf fmt "type mismatch at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]"
+  | Syntax.Type_mismatch {loc; ctxt; computed_ty; expected_ty} ->
+     Format.fprintf fmt "type mismatch at %a: expected type @ @[<v 2>@,%a@,@]@ is not equal to computed type@ @[<v 2>@,%a@,@]"
+       Location.pp_without_filename loc
+       (* FIXME: these are meaningless without the context in which they occur *)
+       Pprint.pp_term  expected_ty
+       Pprint.pp_term  computed_ty
+  | Syntax.Types_not_equal {loc; ctxt; ty1; ty2} ->
+     Format.fprintf fmt "types not equal at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
        (* FIXME: these are meaningless without the context in which they occur *)
        Pprint.pp_term  ty1
        Pprint.pp_term  ty2
-  | `Term_mismatch (loc, ctxt, tm1, tm2, ty) ->
+  | Syntax.Term_mismatch (loc, ctxt, tm1, tm2, ty) ->
      Format.fprintf fmt
        "terms not equal at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]@ at type@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
@@ -26,11 +32,20 @@ let pp_msg fmt = function
        Pprint.pp_term  tm1
        Pprint.pp_term  tm2
        Pprint.pp_term  ty
-  | `VarNotFound (loc, nm)  ->
+  | Syntax.Term_is_not_a_type loc ->
+     Format.fprintf fmt
+       "term is not a type at %a"
+       Location.pp_without_filename loc
+  | Syntax.BadApplication { loc; arg_loc; ctxt; ty } ->
+     Format.fprintf fmt
+       "Application of a non function at %a: term has type@ @[<v 2>@,%a@,@]"
+       Location.pp_without_filename loc
+       Pprint.pp_term               ty
+  | Syntax.VarNotFound (loc, nm)  ->
      Format.fprintf fmt "Variable '%s' not in scope at %a"
        nm
        Location.pp_without_filename loc
-  | `MsgLoc (loc, msg) ->
+  | Syntax.MsgLoc (loc, msg) ->
      Format.fprintf fmt "%s at %a"
        msg
        Location.pp_without_filename loc
@@ -84,5 +99,5 @@ let pprint_file filename =
   let ch    = open_in filename in
   let lb    = Lexing.from_channel ch in
   let decls = Parser.file Lexer.program_token lb in
-  Format.set_margin 80;
+  Format.set_margin 100;
   pprint_decls decls

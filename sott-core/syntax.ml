@@ -889,11 +889,8 @@ end = struct
            | typ, Some defn ->
               defn)
       | Free_global nm ->
-         (match Context.lookup_exn nm ctxt with
-           | typ, None ->
-              V_Neutral (H_Free_global { name = nm; typ; defn = None }, E_Nil)
-           | typ, Some defn ->
-              V_Neutral (H_Free_global { name = nm; typ; defn = Some defn }, E_Nil))
+         let typ, defn = Context.lookup_exn nm ctxt in
+         V_Neutral (H_Free_global { name = nm; typ; defn }, E_Nil)
       | Coerce { coercee; src_type; tgt_type } ->
          coerce (eval coercee env) (eval src_type env) (eval tgt_type env)
 
@@ -937,11 +934,13 @@ end
 
 (******************************************************************************)
 type error_message =
-  [ `Type_mismatch of Location.t * Context.t * term * term
-  | `Term_mismatch of Location.t * Context.t * term * term * term
-  | `VarNotFound of Location.t * string
-  | `MsgLoc of Location.t * string
-  ]
+  | Type_mismatch of { loc : Location.t; ctxt : Context.t; computed_ty : term; expected_ty : term }
+  | Types_not_equal of { loc : Location.t; ctxt : Context.t; ty1 : term; ty2 : term }
+  | Term_is_not_a_type of Location.t
+  | Term_mismatch of Location.t * Context.t * term * term * term
+  | VarNotFound of Location.t * string
+  | BadApplication of { loc : Location.t; arg_loc : Location.t; ctxt : Context.t; ty : term }
+  | MsgLoc of Location.t * string
 
 module ScopeClose = Scoping.Close (Context)
 
@@ -991,11 +990,13 @@ let rec is_type ctxt = function
      (synthesise_elims_type ctxt h es >>= function
        | V_Set ->
           Ok ()
-       | _ ->
-          Error (`MsgLoc (term_loc, "expecting a value of type 'Set'")))
+       | ty ->
+          let computed_ty = reify_type_small ty 0 in
+          let expected_ty = reify_type_small V_Set 0 in
+          Error (Type_mismatch { loc = term_loc; ctxt; computed_ty; expected_ty }))
 
   | { term_loc } ->
-     Error (`MsgLoc (term_loc, "Not a type"))
+     Error (Term_is_not_a_type term_loc)
 
 and has_type ctxt ty tm = match expand_value ty, tm with
   | ty, { term_data = Neutral (h, elims); term_loc } ->
@@ -1003,16 +1004,17 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      if equal_types ty ty' then
        Ok ()
      else
-       let ty  = reify_type_small ty 0 in
-       let ty' = reify_type_small ty' 0 in
-       Error (`Type_mismatch (term_loc, ctxt, ty, ty'))
+       let expected_ty  = reify_type_small ty 0 in
+       let computed_ty = reify_type_small ty' 0 in
+       Error (Type_mismatch { loc = term_loc
+                            ; ctxt; computed_ty; expected_ty })
 
   | V_Pi (s, VB (_, t)), { term_data = Lam tm } ->
      let x, tm, ctxt = ScopeClose.close s tm ctxt in
      has_type ctxt (t x) tm
 
   | V_Pi _, { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a function, but isn't"))
+     Error (MsgLoc (term_loc, "This term is expected to be a function, but isn't"))
 
   | V_Sigma (s, VB (_, t)), { term_data = Pair (tm_s, tm_t) } ->
      has_type ctxt s tm_s >>= fun () ->
@@ -1020,7 +1022,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      has_type ctxt (t tm_s) tm_t
 
   | V_Sigma _, { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a pair, but isn't"))
+     Error (MsgLoc (term_loc, "This term is expected to be a pair, but isn't"))
 
   | V_Set, { term_data = Bool | Nat } ->
      Ok ()
@@ -1053,26 +1055,26 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      has_type ctxt ty2 tm2
 
   | V_Set, { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a code for a type, but isn't"))
+     Error (MsgLoc (term_loc, "This term is expected to be a code for a type, but isn't"))
 
   | V_Bool, { term_data = True | False } ->
      Ok ()
 
   | V_Bool, { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a boolean, but isn't"))
+     Error (MsgLoc (term_loc, "This term is expected to be a boolean, but isn't"))
 
   | V_Nat, { term_data = Zero } ->
      Ok ()
   | V_Nat, { term_data = Succ n } ->
      has_type ctxt V_Nat n
   | V_Nat, { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a Nat, but isn't"))
+     Error (MsgLoc (term_loc, "This term is expected to be a Nat, but isn't"))
 
   | V_QuotType (ty, _), { term_data = QuotIntro tm } ->
      has_type ctxt ty tm
   | V_QuotType (ty, _), { term_loc } ->
-     Error (`MsgLoc (term_loc,
-                     "This term is expected to be a member of a quotient type, but isn't"))
+     Error (MsgLoc (term_loc,
+                    "This term is expected to be a member of a quotient type, but isn't"))
 
   | V_TyEq (ty1, ty2),
     { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }; term_loc } ->
@@ -1092,23 +1094,23 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      if equal_types (ty_t tm_x) ty1 && equal_types (ty_t tm_y) ty2 then
        Ok ()
      else
-       Error (`MsgLoc (term_loc, "type mismatch in subst"))
+       (* FIXME: report the mismatched types here *)
+       Error (MsgLoc (term_loc, "type mismatch in subst"))
 
   | V_TyEq (ty1, ty2),
     { term_data = Refl; term_loc } ->
      if equal_types ty1 ty2 then
        Ok ()
      else
-       Error (`MsgLoc (term_loc, "types not equal in refl"))
+       let ty1 = reify_type_small ty1 0 in
+       let ty2 = reify_type_small ty2 0 in
+       Error (Types_not_equal { loc = term_loc; ctxt; ty1; ty2 })
 
   | V_TyEq _, { term_loc } ->
-     Error (`MsgLoc (term_loc,
-                     "This term is expected to be a proof of a type equality, but isn't"))
+     Error (MsgLoc (term_loc,
+                    "This term is expected to be a proof of a type equality, but isn't"))
 
   | V_TmEq { s; s_ty; t; t_ty }, { term_data = Refl; term_loc } ->
-     (* FIXME: "Using 'Refl' as a proof of the equality 'XXX' failed
-        because the types are not equal/terms are not judgementally
-        equal." *)
      if equal_types s_ty t_ty then
        (if equal_terms s t s_ty then
           Ok ()
@@ -1116,11 +1118,11 @@ and has_type ctxt ty tm = match expand_value ty, tm with
           let s = reify_small s_ty s 0 in
           let t = reify_small s_ty t 0 in
           let ty = reify_type_small s_ty 0 in
-          Error (`Term_mismatch (term_loc, ctxt, s, t, ty)))
+          Error (Term_mismatch (term_loc, ctxt, s, t, ty)))
      else
        let s_ty = reify_type_small s_ty 0 in
        let t_ty = reify_type_small t_ty 0 in
-       Error (`Type_mismatch (term_loc, ctxt, s_ty, t_ty))
+       Error (Types_not_equal { loc = term_loc; ctxt; ty1 = s_ty; ty2 = t_ty})
 
   | V_TmEq { s=tm_f1; s_ty; t=tm_f2; t_ty}, { term_data = Funext proof } ->
      (match expand_value s_ty, expand_value t_ty with
@@ -1143,14 +1145,14 @@ and has_type ctxt ty tm = match expand_value ty, tm with
           in
           has_type ctxt reqd_ty proof
        | _ ->
-          Error (`MsgLoc (tm.term_loc, "Misapplied functional extensionality")))
+          Error (MsgLoc (tm.term_loc, "Misapplied functional extensionality")))
 
   | V_TmEq {s; s_ty; t; t_ty}, { term_data = Coh prf; term_loc } ->
      has_type ctxt (V_TyEq (s_ty, t_ty)) prf >>= fun () ->
      if equal_terms t (coerce s s_ty t_ty) t_ty then
        Ok ()
      else
-       Error (`MsgLoc (term_loc, "invalid Coh"))
+       Error (MsgLoc (term_loc, "invalid use of coherence"))
 
   | V_TmEq { s; s_ty; t; t_ty }, { term_data = SameClass prf; term_loc } ->
      (match expand_value s, expand_value s_ty, expand_value t, expand_value t_ty with
@@ -1159,17 +1161,18 @@ and has_type ctxt ty tm = match expand_value ty, tm with
          V_QuotIntro a2,
          V_QuotType (ty2, r2) ->
           (if equal_types ty1 ty2 then Ok ()
-           else Error (`MsgLoc (term_loc, "underlying types not equal")))
+           else Error (MsgLoc (term_loc, "underlying types not equal")))
           >>= fun () ->
           (if equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set) then Ok ()
-           else Error (`MsgLoc (term_loc, "relations not equal")))
+           else Error (MsgLoc (term_loc, "relations not equal")))
           >>= fun () ->
           has_type ctxt (apply (apply r1 a1) a2) prf
        | _ ->
-          Error (`MsgLoc (term_loc, "Misused 'same-class'")))
+          Error (MsgLoc (term_loc, "Misused 'same-class'")))
 
   | V_TmEq _, { term_loc } ->
-     Error (`MsgLoc (term_loc, "This term is expected to be a proof of a term equality, but isn't"))
+     Error (MsgLoc (term_loc,
+                    "This term is expected to be a proof of a term equality, but isn't"))
 
   | ( V_True | V_False | V_Zero | V_Succ _
     | V_Lam _ | V_Pair _ | V_QuotIntro _
@@ -1185,14 +1188,14 @@ and synthesise_head_type ctxt = function
        | Ok ty ->
           Ok ty
        | Error (`VarNotFound nm) ->
-          Error (`VarNotFound (head_loc, nm)))
+          Error (VarNotFound (head_loc, nm)))
 
   | { head_data = Free_global nm; head_loc } ->
      (match Context.lookup_global nm ctxt with
        | Ok ty ->
           Ok ty
        | Error (`VarNotFound nm) ->
-          Error (`VarNotFound (head_loc, nm)))
+          Error (VarNotFound (head_loc, nm)))
 
   | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } ->
      is_type ctxt src_type >>= fun () ->
@@ -1214,11 +1217,10 @@ and synthesise_elims_type ctxt h = function
            has_type ctxt s tm >>= fun () ->
            Ok (t (Evaluation.eval0 ctxt tm))
         | ty ->
-           Error (`MsgLoc (elims_loc, "attempt to apply non function")))
-  (*        let loc1 = location_of_neutral h elims in
-            let loc2 = location_of_term tm in
-            let ty   = reify_type ty 0 in
-            Error (`BadApplication (loc1, loc2, ty)))*)
+           let loc     = location_of_neutral h elims in
+           let arg_loc = location_of_term tm in
+           let ty      = reify_type ty 0 in
+           Error (BadApplication {loc;arg_loc;ctxt;ty}))
 
   | { elims_data = ElimBool (elims, elim_ty, tm_t, tm_f); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -1232,7 +1234,8 @@ and synthesise_elims_type ctxt h = function
            has_type ctxt (ty V_False) tm_f >>= fun () ->
            Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
         | _ ->
-           Error (`MsgLoc (elims_loc, "attempt to eliminate non boolean")))
+           (* FIXME: custom error message for this kind of bad elimination *)
+           Error (MsgLoc (elims_loc, "attempt to eliminate non boolean")))
 
   | { elims_data = ElimNat (elims, elim_ty, tm_z, tm_s); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -1253,7 +1256,7 @@ and synthesise_elims_type ctxt h = function
             has_type ctxt (ty (V_Succ n)) tm_s) >>= fun () ->
            Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
         | _ ->
-           Error (`MsgLoc (elims_loc, "attempt to eliminate non natural")))
+           Error (MsgLoc (elims_loc, "attempt to eliminate non natural")))
 
   | { elims_data = ElimQ (elims, elim_ty, tm, tm_eq); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -1280,7 +1283,7 @@ and synthesise_elims_type ctxt h = function
            >>= fun () ->
            Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
         | _ ->
-           Error (`MsgLoc (elims_loc, "attempt to eliminate non quotient value")))
+           Error (MsgLoc (elims_loc, "attempt to eliminate non quotient value")))
 
   | { elims_data = Project (elims, `fst); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -1294,7 +1297,7 @@ and synthesise_elims_type ctxt h = function
         | _ ->
            let _loc1 = location_of_neutral h elims in
            let _loc2 = elims_loc in
-           Error (`MsgLoc (elims_loc, "attempt to project #fst from expression of non pair type")))
+           Error (MsgLoc (elims_loc, "attempt to project #fst from expression of non pair type")))
 
   | { elims_data = Project (elims, `snd); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -1309,4 +1312,4 @@ and synthesise_elims_type ctxt h = function
                          VB (x^"_"^x', fun _ ->
                              V_TyEq (t vs, t' vs'))))))))
         | _ ->
-           Error (`MsgLoc (elims_loc, "attempt to project #snd from expression of non pair type")))
+           Error (MsgLoc (elims_loc, "attempt to project #snd from expression of non pair type")))

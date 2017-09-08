@@ -141,12 +141,14 @@ module Evaluation : sig
 end
 
 type error_message =
-  [ `Type_mismatch of Location.t * Context.t * term * term
-  | `Term_mismatch of Location.t * Context.t * term * term * term
-  | `VarNotFound of Location.t * string
-  | `MsgLoc of Location.t * string
-  ]
+  | Type_mismatch of { loc : Location.t; ctxt : Context.t; computed_ty : term; expected_ty : term }
+  | Types_not_equal of { loc : Location.t; ctxt : Context.t; ty1 : term; ty2 : term }
+  | Term_is_not_a_type of Location.t
+  | Term_mismatch of Location.t * Context.t * term * term * term
+  | VarNotFound of Location.t * string
+  | BadApplication of { loc : Location.t; arg_loc : Location.t; ctxt : Context.t; ty : term }
+  | MsgLoc of Location.t * string
 
-val is_type : Context.t -> term -> (unit, [> error_message]) result
+val is_type : Context.t -> term -> (unit, error_message) result
 
-val has_type : Context.t -> value -> term -> (unit, [> error_message]) result
+val has_type : Context.t -> value -> term -> (unit, error_message) result
