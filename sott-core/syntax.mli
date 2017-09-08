@@ -142,6 +142,7 @@ end
 
 type error_message =
   [ `Type_mismatch of Location.t * Context.t * term * term
+  | `Term_mismatch of Location.t * Context.t * term * term * term
   | `VarNotFound of Location.t * string
   | `MsgLoc of Location.t * string
   ]

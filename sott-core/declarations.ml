@@ -13,11 +13,19 @@ let pp_failed_type_equation fmt (ctxt, ty1, ty2) =
 
 let pp_msg fmt = function
   | `Type_mismatch (loc, ctxt, ty1, ty2) ->
-     Format.fprintf fmt "type mismatch at %a: %a is not equal to %a"
+     Format.fprintf fmt "type mismatch at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
        (* FIXME: these are meaningless without the context in which they occur *)
        Pprint.pp_term  ty1
        Pprint.pp_term  ty2
+  | `Term_mismatch (loc, ctxt, tm1, tm2, ty) ->
+     Format.fprintf fmt
+       "terms not equal at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]@ at type@ @[<v 2>@,%a@,@]"
+       Location.pp_without_filename loc
+       (* FIXME: these are meaningless without the context in which they occur *)
+       Pprint.pp_term  tm1
+       Pprint.pp_term  tm2
+       Pprint.pp_term  ty
   | `VarNotFound (loc, nm)  ->
      Format.fprintf fmt "Variable '%s' not in scope at %a"
        nm
@@ -33,7 +41,7 @@ let rec process_decls ctxt = function
   | `Def (id, ty, tm)::decls ->
      (match Syntax.is_type ctxt ty with
        | Error msg ->
-          Format.eprintf "ERR: Checking '%s''s type: %a\n%!"
+          Format.eprintf "@[<v>ERR: Checking '%s''s type: %a@]\n%!"
             id
             pp_msg msg;
           Error ()
@@ -41,7 +49,7 @@ let rec process_decls ctxt = function
           let ty = Syntax.Evaluation.eval0 ctxt ty in
           match Syntax.has_type ctxt ty tm with
             | Error msg ->
-               Format.eprintf "ERR: Checking '%s' body: %a\n%!"
+               Format.eprintf "@[<v>ERR: Checking '%s' body: %a@]\n%!"
                  id
                  pp_msg msg;
                Error ()

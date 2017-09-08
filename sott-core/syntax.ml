@@ -455,7 +455,7 @@ and v_elims =
 and v_head =
   | H_Var of { shift : shift; typ : value }
   | H_Free_local of { name  : string; typ : value }
-  | H_Free_global of { name  : string; typ : value }
+  | H_Free_global of { name  : string; typ : value; defn : value option }
   | H_Coe of { coercee  : value
              ; src_type : value
              ; tgt_type : value
@@ -525,6 +525,12 @@ let rec eval_elims t = function
   | E_ElimQ (es, ty, v) ->
      elimq ty v (eval_elims t es)
 
+let rec expand_value = function
+  | V_Neutral (H_Free_global { defn = Some defn }, es) ->
+     expand_value (eval_elims defn es)
+  | ty ->
+     ty
+
 
 let var ty i =
   V_Neutral (H_Var { shift = i; typ = ty }, E_Nil)
@@ -534,7 +540,7 @@ let free x ty =
 
 let (@->) s t = V_Pi (s, VB ("x", fun _ -> t))
 
-let rec coerce v src tgt = match v, src, tgt with
+let rec coerce v src tgt = match v, expand_value src, expand_value tgt with
   | v, V_Bool, V_Bool -> v
   | v, V_Set,  V_Set  -> v
   | n, V_Nat, V_Nat -> n
@@ -566,139 +572,160 @@ let rec coerce v src tgt = match v, src, tgt with
 (* FIXME: equality test rather than reify to term and check for alpha
    equality? *)
 
-let rec reify_type v i = match v with
-  | V_Pi (s, VB (x, t)) ->
-     mk_term (Pi (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
-  | V_Sigma (s, VB (x, t)) ->
-     mk_term (Sigma (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
-  | V_Set ->
-     mk_term Set
-  | V_Bool ->
-     mk_term Bool
-  | V_Nat ->
-     mk_term Nat
-  | V_QuotType (ty, r) ->
-     mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set) r i))
-  | V_TyEq (s, t) ->
-     mk_term (TyEq (reify_type s i, reify_type t i))
-  | V_TmEq {s; s_ty; t; t_ty} ->
-     mk_term (TmEq { tm1 = reify s_ty s i
-                   ; ty1 = reify_type s_ty i
-                   ; tm2 = reify t_ty t i
-                   ; ty2 = reify_type t_ty i
-                   })
-  | V_Neutral (h, es) ->
-     reify_neutral h es i
-  | _ ->
-     failwith "internal error: refiy_type -- not in canonical form"
+let reifiers ~unfold_defns =
+  let rec reify_type v i = match v with
+    | V_Pi (s, VB (x, t)) ->
+       mk_term (Pi (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
+    | V_Sigma (s, VB (x, t)) ->
+       mk_term (Sigma (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
+    | V_Set ->
+       mk_term Set
+    | V_Bool ->
+       mk_term Bool
+    | V_Nat ->
+       mk_term Nat
+    | V_QuotType (ty, r) ->
+       mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set) r i))
+    | V_TyEq (s, t) ->
+       mk_term (TyEq (reify_type s i, reify_type t i))
+    | V_TmEq {s; s_ty; t; t_ty} ->
+       mk_term (TmEq { tm1 = reify s_ty s i
+                     ; ty1 = reify_type s_ty i
+                     ; tm2 = reify t_ty t i
+                     ; ty2 = reify_type t_ty i
+                     })
+    | V_Neutral (h, es) ->
+       reify_neutral h es i
+    | _ ->
+       failwith "internal error: reify_type -- not in canonical form"
 
-and reify ty v i = match ty, v with
-  | V_Pi (s, VB (_, t)), V_Lam (VB (x, body)) ->
-     let v = var s i in
-     mk_term (Lam (B (x, reify (t v) (body v) (i+1))))
-  | V_Pi (s, VB (x, t)), f ->
-     let v = var s i in
-     mk_term (Lam (B (x, reify (t v) (apply f v) (i+1))))
-  | V_Sigma (s, VB (_, t)), p ->
-     mk_term (Pair (reify s (vfst p) i, reify (t (vfst p)) (vsnd p) i))
-  | V_TyEq _, v
-  | V_TmEq _, v       ->
-     mk_term Irrel
-  | V_Bool,   V_True  ->
-     mk_term True
-  | V_Bool,   V_False ->
-     mk_term False
-  | V_Nat, V_Zero ->
-     mk_term Zero
-  | V_Nat, V_Succ n ->
-     mk_term (Succ (reify V_Nat n i))
-  | V_Set,    v ->
-     reify_type v i
-  | V_QuotType (t, _), V_QuotIntro v ->
-     mk_term (QuotIntro (reify t v i))
-  | _, V_Neutral (h, es) ->
-     reify_neutral h es i
-  | _ ->
-     failwith "internal error: reification failed"
+  and reify ty v i = match expand_value ty, v with
+    | V_Pi (s, VB (_, t)), V_Lam (VB (x, body)) ->
+       let v = var s i in
+       mk_term (Lam (B (x, reify (t v) (body v) (i+1))))
+    | V_Pi (s, VB (x, t)), f ->
+       let v = var s i in
+       mk_term (Lam (B (x, reify (t v) (apply f v) (i+1))))
+    | V_Sigma (s, VB (_, t)), p when unfold_defns ->
+       mk_term (Pair (reify s (vfst p) i, reify (t (vfst p)) (vsnd p) i))
+    | V_Sigma (s, VB (_, t)), V_Pair (a, b) ->
+       mk_term (Pair (reify s a i, reify (t a) b i))
+    | V_TyEq _, v
+    | V_TmEq _, v       ->
+       mk_term Irrel
+    | V_Bool,   V_True  ->
+       mk_term True
+    | V_Bool,   V_False ->
+       mk_term False
+    | V_Nat, V_Zero ->
+       mk_term Zero
+    | V_Nat, V_Succ n ->
+       mk_term (Succ (reify V_Nat n i))
+    | V_Set,    v ->
+       reify_type v i
+    | V_QuotType (t, _), V_QuotIntro v ->
+       mk_term (QuotIntro (reify t v i))
+    | _, V_Neutral (h, es) ->
+       reify_neutral h es i
+    | _ ->
+       failwith "internal error: reification failed"
 
-and reify_neutral h es i : term = match h with
-  | H_Var { shift; typ } ->
-     let es, _ = reify_elims h typ es i in
-     let h     = mk_head (Bound (i-shift-1)) in
-     mk_term (Neutral (h, es))
-  | H_Free_local { name; typ } ->
-     let es, _ = reify_elims h typ es i in
-     let h     = mk_head (Free_local name) in
-     mk_term (Neutral (h, es))
-  | H_Free_global { name; typ } ->
-     let es, _ = reify_elims h typ es i in
-     let h     = mk_head (Free_global name) in
-     mk_term (Neutral (h, es))
-  | H_Coe { coercee; src_type; tgt_type } ->
-     let es_tm, ty = reify_elims h tgt_type es i in
-     let ty1_tm = reify_type src_type i in
-     let ty2_tm = reify_type tgt_type i in
-     if AlphaEquality.equal_term ty1_tm ty2_tm then
-       reify ty (eval_elims coercee es) i
-     else
-       let h = mk_head (Coerce { coercee  = reify src_type coercee i
-                               ; src_type = ty1_tm
-                               ; tgt_type = ty2_tm
-                               ; eq_proof = mk_term Irrel })
-       in
-       mk_term (Neutral (h, es_tm))
+  and reify_neutral h es i : term = match h with
+    | H_Var { shift; typ } ->
+       let es, _ = reify_elims h typ es i in
+       let h     = mk_head (Bound (i-shift-1)) in
+       mk_term (Neutral (h, es))
+    | H_Free_local { name; typ } ->
+       let es, _ = reify_elims h typ es i in
+       let h     = mk_head (Free_local name) in
+       mk_term (Neutral (h, es))
+    | H_Free_global { name; typ; defn = None } ->
+       let es, _ = reify_elims h typ es i in
+       let h     = mk_head (Free_global name) in
+       mk_term (Neutral (h, es))
+    | H_Free_global { name; typ; defn = Some defn } ->
+       if unfold_defns then
+         let _, ty = reify_elims h typ es i in
+         reify ty (eval_elims defn es) i
+       else
+         let es, _ = reify_elims h typ es i in
+         let h     = mk_head (Free_global name) in
+         mk_term (Neutral (h, es))
+    | H_Coe { coercee; src_type; tgt_type } ->
+       let es_tm, ty = reify_elims h tgt_type es i in
+       let ty1_tm = reify_type src_type i in
+       let ty2_tm = reify_type tgt_type i in
+       if AlphaEquality.equal_term ty1_tm ty2_tm then
+         reify ty (eval_elims coercee es) i
+       else
+         let h = mk_head (Coerce { coercee  = reify src_type coercee i
+                                 ; src_type = ty1_tm
+                                 ; tgt_type = ty2_tm
+                                 ; eq_proof = mk_term Irrel })
+         in
+         mk_term (Neutral (h, es_tm))
 
-and reify_elims h ty es i = match es with
-  | E_Nil ->
-     mk_elim Nil, ty
-  | E_App (es, v) ->
-     (match reify_elims h ty es i with
-       | es, V_Pi (s, VB (_, t)) ->
-          mk_elim (App (es, reify s v i)), t v
-       | _ ->
-          failwith "internal error: type error reifying application")
-  | E_If (es, VB (x, elim_ty), v_t, v_f) ->
-     (match reify_elims h ty es i with
-       | es', V_Bool ->
-          mk_elim (ElimBool (es',
-                             B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
-                             reify (elim_ty V_True) v_t i,
-                             reify (elim_ty V_False) v_f i)),
-          elim_ty (V_Neutral (h, es))
-       | _ ->
-          failwith "internal error: type error reifying bool case switch")
-  | E_Project (es, component) ->
-     (match reify_elims h ty es i, component with
-       | (reified_es, V_Sigma (s, _)), `fst ->
-          mk_elim (Project (reified_es, `fst)), s
-       | (reified_es, V_Sigma (s, VB (_, t))), `snd ->
-          mk_elim (Project (reified_es, `snd)), t (V_Neutral (h, es))
-       | _ ->
-          failwith "internal error: type error reifying a projection")
-  | E_ElimNat (es, VB (x, elim_ty), v_z, v_s) ->
-     (match reify_elims h ty es i with
-       | es', V_Nat ->
-          mk_elim (ElimNat (es',
-                            B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
-                            reify (elim_ty V_Zero) v_z i,
-                            let VB (n, v_s) = v_s in
-                            let var_n = var V_Nat i in
-                            let VB (p, v_s) = v_s var_n in
-                            let var_p = var (elim_ty var_n) (i+1) in
-                            B (n, B (p, reify (elim_ty var_n) (v_s var_p) (i+2))))),
-          elim_ty (V_Neutral (h, es))
-       | _ ->
-          failwith "internal error: type error reifying bool case switch")
-  | E_ElimQ (es, VB (x, elim_ty), VB (a, v)) ->
-     (match reify_elims h ty es i with
-       | es', (V_QuotType (s, _) as ty') ->
-          mk_elim (ElimQ (es',
-                          B (x, reify_type (elim_ty (var ty' i)) (i+1)),
-                          B (a, reify (elim_ty (V_QuotIntro (var s i))) (v (var s i)) (i+1)),
-                          B ("x1", B ("x2", B ("xr", mk_term Irrel))))),
-          elim_ty (V_Neutral (h, es))
-       | _ ->
-          failwith "internal error: type error reifying quotient elim")
+  (* FIXME: this unfolds too much??? *)
+  and reify_elims h ty es i =
+    let tm, ty = reify_elims_inner h ty es i in
+    tm, expand_value ty
+
+  and reify_elims_inner h ty es i = match es with
+    | E_Nil ->
+       mk_elim Nil, ty
+    | E_App (es, v) ->
+       (match reify_elims h ty es i with
+         | es, V_Pi (s, VB (_, t)) ->
+            mk_elim (App (es, reify s v i)), t v
+         | _ ->
+            failwith "internal error: type error reifying application")
+    | E_If (es, VB (x, elim_ty), v_t, v_f) ->
+       (match reify_elims h ty es i with
+         | es', V_Bool ->
+            mk_elim (ElimBool (es',
+                               B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
+                               reify (elim_ty V_True) v_t i,
+                               reify (elim_ty V_False) v_f i)),
+            elim_ty (V_Neutral (h, es))
+         | _ ->
+            failwith "internal error: type error reifying bool case switch")
+    | E_Project (es, component) ->
+       (match reify_elims h ty es i, component with
+         | (reified_es, V_Sigma (s, _)), `fst ->
+            mk_elim (Project (reified_es, `fst)), s
+         | (reified_es, V_Sigma (s, VB (_, t))), `snd ->
+            mk_elim (Project (reified_es, `snd)), t (V_Neutral (h, es))
+         | _ ->
+            failwith "internal error: type error reifying a projection")
+    | E_ElimNat (es, VB (x, elim_ty), v_z, v_s) ->
+       (match reify_elims h ty es i with
+         | es', V_Nat ->
+            mk_elim (ElimNat (es',
+                              B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
+                              reify (elim_ty V_Zero) v_z i,
+                              let VB (n, v_s) = v_s in
+                              let var_n = var V_Nat i in
+                              let VB (p, v_s) = v_s var_n in
+                              let var_p = var (elim_ty var_n) (i+1) in
+                              B (n, B (p, reify (elim_ty var_n) (v_s var_p) (i+2))))),
+            elim_ty (V_Neutral (h, es))
+         | _ ->
+            failwith "internal error: type error reifying bool case switch")
+    | E_ElimQ (es, VB (x, elim_ty), VB (a, v)) ->
+       (match reify_elims h ty es i with
+         | es', (V_QuotType (s, _) as ty') ->
+            mk_elim (ElimQ (es',
+                            B (x, reify_type (elim_ty (var ty' i)) (i+1)),
+                            B (a, reify (elim_ty (V_QuotIntro (var s i))) (v (var s i)) (i+1)),
+                            B ("x1", B ("x2", B ("xr", mk_term Irrel))))),
+            elim_ty (V_Neutral (h, es))
+         | _ ->
+            failwith "internal error: type error reifying quotient elim")
+  in
+  reify_type, reify
+
+let reify_type, reify = reifiers ~unfold_defns:true
+let reify_type_small, reify_small = reifiers ~unfold_defns:false
 
 let equal_types ty1 ty2 =
   let ty1 = reify_type ty1 0 in
@@ -864,9 +891,9 @@ end = struct
       | Free_global nm ->
          (match Context.lookup_exn nm ctxt with
            | typ, None ->
-              V_Neutral (H_Free_global { name = nm; typ }, E_Nil)
+              V_Neutral (H_Free_global { name = nm; typ; defn = None }, E_Nil)
            | typ, Some defn ->
-              defn)
+              V_Neutral (H_Free_global { name = nm; typ; defn = Some defn }, E_Nil))
       | Coerce { coercee; src_type; tgt_type } ->
          coerce (eval coercee env) (eval src_type env) (eval tgt_type env)
 
@@ -911,6 +938,7 @@ end
 (******************************************************************************)
 type error_message =
   [ `Type_mismatch of Location.t * Context.t * term * term
+  | `Term_mismatch of Location.t * Context.t * term * term * term
   | `VarNotFound of Location.t * string
   | `MsgLoc of Location.t * string
   ]
@@ -969,14 +997,14 @@ let rec is_type ctxt = function
   | { term_loc } ->
      Error (`MsgLoc (term_loc, "Not a type"))
 
-and has_type ctxt ty tm = match ty, tm with
+and has_type ctxt ty tm = match expand_value ty, tm with
   | ty, { term_data = Neutral (h, elims); term_loc } ->
      synthesise_elims_type ctxt h elims >>= fun ty' ->
-     let ty  = reify_type ty 0 in
-     let ty' = reify_type ty' 0 in
-     if AlphaEquality.equal_term ty ty' then
+     if equal_types ty ty' then
        Ok ()
      else
+       let ty  = reify_type_small ty 0 in
+       let ty' = reify_type_small ty' 0 in
        Error (`Type_mismatch (term_loc, ctxt, ty, ty'))
 
   | V_Pi (s, VB (_, t)), { term_data = Lam tm } ->
@@ -1085,30 +1113,37 @@ and has_type ctxt ty tm = match ty, tm with
        (if equal_terms s t s_ty then
           Ok ()
         else
-          Error (`MsgLoc (term_loc, "terms not equal in refl")))
+          let s = reify_small s_ty s 0 in
+          let t = reify_small s_ty t 0 in
+          let ty = reify_type_small s_ty 0 in
+          Error (`Term_mismatch (term_loc, ctxt, s, t, ty)))
      else
-       Error (`MsgLoc (term_loc, "types not equal in refl"))
+       let s_ty = reify_type_small s_ty 0 in
+       let t_ty = reify_type_small t_ty 0 in
+       Error (`Type_mismatch (term_loc, ctxt, s_ty, t_ty))
 
-  | V_TmEq { s=tm_f1; s_ty=V_Pi (s1, VB (_, t1))
-           ; t=tm_f2; t_ty=V_Pi (s2, VB (_, t2))},
-    { term_data = Funext proof } ->
-     let x1, x2, _, proof, ctxt =
-       ScopeClose.close3
-         s1
-         (fun _ -> s2)
-         (fun x1 x2 ->
-            V_TmEq {s=x1; s_ty=s2; t=x2; t_ty=s2})
-         proof
-         ctxt
-     in
-     let reqd_ty =
-       V_TmEq { s    = apply tm_f1 x1
-              ; s_ty = t1 x1
-              ; t    = apply tm_f2 x2
-              ; t_ty = t2 x2
-              }
-     in
-     has_type ctxt reqd_ty proof
+  | V_TmEq { s=tm_f1; s_ty; t=tm_f2; t_ty}, { term_data = Funext proof } ->
+     (match expand_value s_ty, expand_value t_ty with
+       | V_Pi (s1, VB (_, t1)), V_Pi (s2, VB (_, t2)) ->
+          let x1, x2, _, proof, ctxt =
+            ScopeClose.close3
+              s1
+              (fun _ -> s2)
+              (fun x1 x2 ->
+                 V_TmEq {s=x1; s_ty=s2; t=x2; t_ty=s2})
+              proof
+              ctxt
+          in
+          let reqd_ty =
+            V_TmEq { s    = apply tm_f1 x1
+                   ; s_ty = t1 x1
+                   ; t    = apply tm_f2 x2
+                   ; t_ty = t2 x2
+                   }
+          in
+          has_type ctxt reqd_ty proof
+       | _ ->
+          Error (`MsgLoc (tm.term_loc, "Misapplied functional extensionality")))
 
   | V_TmEq {s; s_ty; t; t_ty}, { term_data = Coh prf; term_loc } ->
      has_type ctxt (V_TyEq (s_ty, t_ty)) prf >>= fun () ->
@@ -1117,16 +1152,21 @@ and has_type ctxt ty tm = match ty, tm with
      else
        Error (`MsgLoc (term_loc, "invalid Coh"))
 
-  | V_TmEq { s = V_QuotIntro a1; s_ty = V_QuotType (ty1, r1)
-           ; t = V_QuotIntro a2; t_ty = V_QuotType (ty2, r2) },
-    { term_data = SameClass prf; term_loc } ->
-     (if equal_types ty1 ty2 then Ok ()
-      else Error (`MsgLoc (term_loc, "underlying types not equal")))
-     >>= fun () ->
-     (if equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set) then Ok ()
-      else Error (`MsgLoc (term_loc, "relations not equal")))
-     >>= fun () ->
-     has_type ctxt (apply (apply r1 a1) a2) prf
+  | V_TmEq { s; s_ty; t; t_ty }, { term_data = SameClass prf; term_loc } ->
+     (match expand_value s, expand_value s_ty, expand_value t, expand_value t_ty with
+       | V_QuotIntro a1,
+         V_QuotType (ty1, r1),
+         V_QuotIntro a2,
+         V_QuotType (ty2, r2) ->
+          (if equal_types ty1 ty2 then Ok ()
+           else Error (`MsgLoc (term_loc, "underlying types not equal")))
+          >>= fun () ->
+          (if equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set) then Ok ()
+           else Error (`MsgLoc (term_loc, "relations not equal")))
+          >>= fun () ->
+          has_type ctxt (apply (apply r1 a1) a2) prf
+       | _ ->
+          Error (`MsgLoc (term_loc, "Misused 'same-class'")))
 
   | V_TmEq _, { term_loc } ->
      Error (`MsgLoc (term_loc, "This term is expected to be a proof of a term equality, but isn't"))
@@ -1168,99 +1208,105 @@ and synthesise_elims_type ctxt h = function
      synthesise_head_type ctxt h
 
   | { elims_data = App (elims, tm); elims_loc } ->
-     (synthesise_elims_type ctxt h elims >>= function
-       | V_Pi (s, VB (_, t)) ->
-          has_type ctxt s tm >>= fun () ->
-          Ok (t (Evaluation.eval0 ctxt tm))
-       | ty ->
-          Error (`MsgLoc (elims_loc, "attempt to apply non function")))
-(*        let loc1 = location_of_neutral h elims in
-          let loc2 = location_of_term tm in
-          let ty   = reify_type ty 0 in
-          Error (`BadApplication (loc1, loc2, ty)))*)
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+        | V_Pi (s, VB (_, t)) ->
+           has_type ctxt s tm >>= fun () ->
+           Ok (t (Evaluation.eval0 ctxt tm))
+        | ty ->
+           Error (`MsgLoc (elims_loc, "attempt to apply non function")))
+  (*        let loc1 = location_of_neutral h elims in
+            let loc2 = location_of_term tm in
+            let ty   = reify_type ty 0 in
+            Error (`BadApplication (loc1, loc2, ty)))*)
 
   | { elims_data = ElimBool (elims, elim_ty, tm_t, tm_f); elims_loc } ->
-     (synthesise_elims_type ctxt h elims >>= function
-       | V_Bool ->
-          (let _, elim_ty, ctxt = ScopeClose.close V_Bool elim_ty ctxt in
-           is_type ctxt elim_ty)
-          >>= fun () ->
-          let ty = Evaluation.eval1 ctxt elim_ty in
-          has_type ctxt (ty V_True) tm_t >>= fun () ->
-          has_type ctxt (ty V_False) tm_f >>= fun () ->
-          Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
-       | _ ->
-          Error (`MsgLoc (elims_loc, "attempt to eliminate non boolean")))
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+        | V_Bool ->
+           (let _, elim_ty, ctxt = ScopeClose.close V_Bool elim_ty ctxt in
+            is_type ctxt elim_ty)
+           >>= fun () ->
+           let ty = Evaluation.eval1 ctxt elim_ty in
+           has_type ctxt (ty V_True) tm_t >>= fun () ->
+           has_type ctxt (ty V_False) tm_f >>= fun () ->
+           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+        | _ ->
+           Error (`MsgLoc (elims_loc, "attempt to eliminate non boolean")))
 
   | { elims_data = ElimNat (elims, elim_ty, tm_z, tm_s); elims_loc } ->
-     (synthesise_elims_type ctxt h elims >>= function
-       | V_Nat ->
-          (let _, elim_ty, ctxt = ScopeClose.close V_Nat elim_ty ctxt in
-           is_type ctxt elim_ty)
-          >>= fun () ->
-          let ty = Evaluation.eval1 ctxt elim_ty in
-          has_type ctxt (ty V_Zero) tm_z >>= fun () ->
-          (let n, _, tm_s, ctxt =
-             ScopeClose.close2
-               V_Nat
-               (fun n -> ty n)
-               tm_s
-               ctxt
-           in
-           has_type ctxt (ty (V_Succ n)) tm_s) >>= fun () ->
-          Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
-       | _ ->
-          Error (`MsgLoc (elims_loc, "attempt to eliminate non natural")))
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+        | V_Nat ->
+           (let _, elim_ty, ctxt = ScopeClose.close V_Nat elim_ty ctxt in
+            is_type ctxt elim_ty)
+           >>= fun () ->
+           let ty = Evaluation.eval1 ctxt elim_ty in
+           has_type ctxt (ty V_Zero) tm_z >>= fun () ->
+           (let n, _, tm_s, ctxt =
+              ScopeClose.close2
+                V_Nat
+                (fun n -> ty n)
+                tm_s
+                ctxt
+            in
+            has_type ctxt (ty (V_Succ n)) tm_s) >>= fun () ->
+           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+        | _ ->
+           Error (`MsgLoc (elims_loc, "attempt to eliminate non natural")))
 
   | { elims_data = ElimQ (elims, elim_ty, tm, tm_eq); elims_loc } ->
-     (synthesise_elims_type ctxt h elims >>= function
-       | V_QuotType (ty_underlying, r) as ty ->
-          (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
-           is_type ctxt elim_ty)
-          >>= fun () ->
-          let ty = Evaluation.eval1 ctxt elim_ty in
-          (let n, tm, ctxt = ScopeClose.close ty_underlying tm ctxt in
-           has_type ctxt (ty (V_QuotIntro n)) tm)
-          >>= fun () ->
-          let tm = Evaluation.eval1 ctxt tm in
-          (let x1, x2, xr, tm_eq, ctxt =
-             ScopeClose.close3
-               ty_underlying
-               (fun _ -> ty_underlying)
-               (fun x1 x2 -> apply (apply r x1) x2)
-               tm_eq
-               ctxt
-           in
-           has_type ctxt (V_TmEq { s = tm x1; s_ty = ty (V_QuotIntro x1)
-                                 ; t = tm x2; t_ty = ty (V_QuotIntro x2) }) tm_eq)
-          >>= fun () ->
-          Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
-       | _ ->
-          Error (`MsgLoc (elims_loc, "attempt to eliminate no quotient value")))
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+        | V_QuotType (ty_underlying, r) as ty ->
+           (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
+            is_type ctxt elim_ty)
+           >>= fun () ->
+           let ty = Evaluation.eval1 ctxt elim_ty in
+           (let n, tm, ctxt = ScopeClose.close ty_underlying tm ctxt in
+            has_type ctxt (ty (V_QuotIntro n)) tm)
+           >>= fun () ->
+           let tm = Evaluation.eval1 ctxt tm in
+           (let x1, x2, xr, tm_eq, ctxt =
+              ScopeClose.close3
+                ty_underlying
+                (fun _ -> ty_underlying)
+                (fun x1 x2 -> apply (apply r x1) x2)
+                tm_eq
+                ctxt
+            in
+            has_type ctxt (V_TmEq { s = tm x1; s_ty = ty (V_QuotIntro x1)
+                                  ; t = tm x2; t_ty = ty (V_QuotIntro x2) }) tm_eq)
+           >>= fun () ->
+           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+        | _ ->
+           Error (`MsgLoc (elims_loc, "attempt to eliminate non quotient value")))
 
   | { elims_data = Project (elims, `fst); elims_loc } ->
-     (synthesise_elims_type ctxt h elims >>= function
-       | V_Sigma (s, t) ->
-          Ok s
-       | V_TyEq (V_Pi (s,t), V_Pi (s',t')) ->
-          Ok (V_TyEq (s',s))
-       | V_TyEq (V_Sigma (s,t), V_Sigma (s',t')) ->
-          Ok (V_TyEq (s,s'))
-       | _ ->
-          let _loc1 = location_of_neutral h elims in
-          let _loc2 = elims_loc in
-          Error (`MsgLoc (elims_loc, "attempt to project from expression of non pair type")))
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+        | V_Sigma (s, t) ->
+           Ok s
+        | V_TyEq (V_Pi (s,t), V_Pi (s',t')) ->
+           Ok (V_TyEq (s',s))
+        | V_TyEq (V_Sigma (s,t), V_Sigma (s',t')) ->
+           Ok (V_TyEq (s,s'))
+        | _ ->
+           let _loc1 = location_of_neutral h elims in
+           let _loc2 = elims_loc in
+           Error (`MsgLoc (elims_loc, "attempt to project #fst from expression of non pair type")))
 
   | { elims_data = Project (elims, `snd); elims_loc } ->
-     (synthesise_elims_type ctxt h elims >>= function
-       | V_Sigma (s, VB (_, t)) ->
-          Ok (t (vfst (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims))))))
-       | V_TyEq (V_Pi (s, VB (x, t)), V_Pi (s', VB (x', t')))
-       | V_TyEq (V_Sigma (s, VB (x, t)), V_Sigma (s', VB (x', t'))) ->
-          Ok (V_Pi (s, VB (x, fun vs ->
-              V_Pi (s', VB (x', fun vs' ->
-                  V_Pi (V_TmEq { s=vs; s_ty=s; t=vs'; t_ty=s' },
-                        VB (x^"_"^x', fun _ ->
-                            V_TyEq (t vs, t' vs'))))))))
-       | _ ->
-          Error (`MsgLoc (elims_loc, "attempt to project from expression of non pair type")))
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+        | V_Sigma (s, VB (_, t)) ->
+           Ok (t (vfst (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims))))))
+        | V_TyEq (V_Pi (s, VB (x, t)), V_Pi (s', VB (x', t')))
+        | V_TyEq (V_Sigma (s, VB (x, t)), V_Sigma (s', VB (x', t'))) ->
+           Ok (V_Pi (s, VB (x, fun vs ->
+               V_Pi (s', VB (x', fun vs' ->
+                   V_Pi (V_TmEq { s=vs; s_ty=s; t=vs'; t_ty=s' },
+                         VB (x^"_"^x', fun _ ->
+                             V_TyEq (t vs, t' vs'))))))))
+        | _ ->
+           Error (`MsgLoc (elims_loc, "attempt to project #snd from expression of non pair type")))
