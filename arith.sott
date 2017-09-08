@@ -2,9 +2,9 @@ define add : Nat -> Nat -> Nat
 as introduce m n,
    use m for _. Nat {
      Zero ->
-       n;
+       use n;
      Succ m add_m_n ->
-       Succ add_m_n
+       use Succ add_m_n;
    }
 
 define two : Nat
@@ -276,15 +276,16 @@ as introduce z1 z2,
                         (f_equal (\x -> add (add (z2#fst) (z1#fst)) x) (add (z2#snd) (z1#snd)) (add (z1#snd) (z2#snd)) (add_comm (z2#snd) (z1#snd))));
          z2 z2' z2r ->
            coherence(subst(Int, x. [add_int [z1] x = add_int x [z1] : Int],
-                           [z2], [z2'], same-class(z2r)))
+                           [z2], [z2'], same-class(z2r)));
        };
      z1 z1' z1r ->
        coherence(subst(Int, x.[add_int x z2 = add_int z2 x : Int],
-                       [z1],[z1'],same-class(z1r)))
+                       [z1],[z1'],same-class(z1r)));
    }
 
 define F : Int -> Set
-as \z -> (b : Bool) * b for x.Set { True -> [z = zero : Int]; False -> [z = one : Int ] }
+as \z -> (b : Bool) * b for x.Set { True  -> [z = zero : Int];
+                                    False -> [z = one : Int ]  }
 
 define v : F zero
 as (True, refl)

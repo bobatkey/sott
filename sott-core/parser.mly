@@ -206,7 +206,7 @@ elim:
       { Apply (t, Location.mk $startpos $endpos) }
   | FOR; x=binder; DOT; ty=term;
       LBRACE; TRUE; ARROW; tm_t=term;
-   SEMICOLON; FALSE; ARROW; tm_f=term;
+   SEMICOLON; FALSE; ARROW; tm_f=term; option(SEMICOLON);
       RBRACE
       { ElimBool (Scoping.bind x ty, tm_t, tm_f, Location.mk $startpos $endpos) }
   | HASH_FST
@@ -216,10 +216,12 @@ elim:
   | FOR; x=binder; DOT; ty=term;
             LBRACE; ZERO; ARROW; tm_z=term;
             SEMICOLON SUCC; n=binder; p=binder; ARROW; tm_s=term;
+            option(SEMICOLON);
             RBRACE
       { ElimNat (Scoping.bind x ty, tm_z, Scoping.bind2 n p tm_s, Location.mk $startpos $endpos) }
   | FOR; x=binder; DOT; ty=term;
-       LBRACE; LSQBRACK; a=binder; RSQBRACK; ARROW; tm=term
-    SEMICOLON; x1=binder; x2=binder; xr=binder; ARROW; tm_eq=term
+       LBRACE; LSQBRACK; a=binder; RSQBRACK; ARROW; tm=term;
+    SEMICOLON; x1=binder; x2=binder; xr=binder; ARROW; tm_eq=term;
+       option(SEMICOLON);
        RBRACE
       { ElimQ (Scoping.bind x ty, Scoping.bind a tm, Scoping.bind3 x1 x2 xr tm_eq, Location.mk $startpos $endpos) }
