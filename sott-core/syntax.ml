@@ -239,126 +239,97 @@ end = struct
     | B (nm, t) -> B (nm, k (j+1) t)
 
   let traverse ~free ~bound j tm =
-    let rec traverse_term j = function
-      | {term_data=Neutral (head, elims)} as tm ->
-         { tm with
-             term_data = Neutral (traverse_head j head, traverse_elims j elims)
-         }
-      | {term_data = Lam t} as tm ->
-         { tm with
-             term_data = Lam (binder traverse_term j t)
-         }
-      | {term_data = Set} as tm ->
-         tm
-      | {term_data = Pi (s, t)} as tm ->
-         { tm with
-             term_data = Pi (traverse_term j s, binder traverse_term j t)
-         }
-      | {term_data = Sigma (s, t)} as tm ->
-         { tm with
-             term_data = Sigma (traverse_term j s, binder traverse_term j t)
-         }
-      | {term_data = Pair (t1, t2)} as tm ->
-         { tm with
-             term_data = Pair (traverse_term j t1, traverse_term j t2)
-         }
-      | {term_data = QuotType (s, r)} as tm ->
-         { tm with
-             term_data = QuotType (traverse_term j s, traverse_term j r) }
-      | {term_data = QuotIntro t} as tm ->
-         { tm with
-             term_data = QuotIntro (traverse_term j t) }
-      | {term_data = TyEq (s, t)} as tm ->
-         { tm with
-             term_data = TyEq (traverse_term j s, traverse_term j t)
-         }
-      | {term_data = TmEq {tm1;ty1;tm2;ty2}} as tm ->
-         { tm with
-             term_data = TmEq { tm1 = traverse_term j tm1
-                              ; ty1 = traverse_term j ty1
-                              ; tm2 = traverse_term j tm2
-                              ; ty2 = traverse_term j ty2
-                              }
-         }
-      | {term_data = Bool | True | False | Nat | Zero} as tm ->
-         tm
-      | {term_data = Succ t} as tm ->
-         { tm with term_data = Succ (traverse_term j t) }
-      | {term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }} as tm ->
-         { tm with
-             term_data = Subst { ty_s = traverse_term j ty_s
-                               ; ty_t = binder traverse_term j ty_t
-                               ; tm_x = traverse_term j tm_x
-                               ; tm_y = traverse_term j tm_y
-                               ; tm_e = traverse_term j tm_e
-                               }
-         }
-      | {term_data = Refl} as tm ->
-         tm
-      | {term_data = Funext prf} as tm ->
-         { tm with
-             term_data = Funext (binder (binder (binder traverse_term)) j prf)
-         }
-      | {term_data = SameClass prf} as tm ->
-         { tm with
-             term_data = SameClass (traverse_term j prf)
-         }
-      | {term_data = Coh prf} as tm ->
-         { tm with
-             term_data = Coh (traverse_term j prf)
-         }
-      | {term_data = Irrel} ->
-         failwith "internal error: attempt to traverse an erased proof term"
+    let rec traverse_term j tm =
+      match tm with
+        | {term_data=Neutral (head, elims)} ->
+           { tm with term_data = Neutral (traverse_head j head, traverse_elims j elims) }
+        | {term_data = Lam t} ->
+           { tm with term_data = Lam (binder traverse_term j t) }
+        | {term_data = Pi (s, t)} ->
+           { tm with term_data = Pi (traverse_term j s, binder traverse_term j t) }
+        | {term_data = Sigma (s, t)} ->
+           { tm with term_data = Sigma (traverse_term j s, binder traverse_term j t) }
+        | {term_data = Pair (t1, t2)} ->
+           { tm with term_data = Pair (traverse_term j t1, traverse_term j t2) }
+        | {term_data = QuotType (s, r)} ->
+           { tm with term_data = QuotType (traverse_term j s, traverse_term j r) }
+        | {term_data = QuotIntro t} ->
+           { tm with term_data = QuotIntro (traverse_term j t) }
+        | {term_data = TyEq (s, t)} ->
+           { tm with term_data = TyEq (traverse_term j s, traverse_term j t) }
+        | {term_data = TmEq {tm1;ty1;tm2;ty2}} ->
+           { tm with
+               term_data = TmEq { tm1 = traverse_term j tm1
+                                ; ty1 = traverse_term j ty1
+                                ; tm2 = traverse_term j tm2
+                                ; ty2 = traverse_term j ty2
+                                } }
+        | {term_data = Bool | True | False | Nat | Zero | Refl | Set} ->
+           tm
+        | {term_data = Succ t} ->
+           { tm with term_data = Succ (traverse_term j t) }
+        | {term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }} ->
+           { tm with
+               term_data = Subst { ty_s = traverse_term j ty_s
+                                 ; ty_t = binder traverse_term j ty_t
+                                 ; tm_x = traverse_term j tm_x
+                                 ; tm_y = traverse_term j tm_y
+                                 ; tm_e = traverse_term j tm_e
+                                 } }
+        | {term_data = Funext prf} ->
+           { tm with term_data = Funext (binder (binder (binder traverse_term)) j prf) }
+        | {term_data = SameClass prf} ->
+           { tm with term_data = SameClass (traverse_term j prf) }
+        | {term_data = Coh prf} ->
+           { tm with term_data = Coh (traverse_term j prf) }
+        | {term_data = Irrel} ->
+           failwith "internal error: attempt to traverse an erased proof term"
 
-    and traverse_head j = function
-      | { head_data = Bound i } as h ->
-         { h with head_data = bound i j }
-      | { head_data = Free_global nm } as h ->
-         { h with head_data = free nm j }
-      | { head_data = Free_local _ } as h ->
-         h
-      | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } as h ->
-         { h with
-              head_data =
-                Coerce { coercee  = traverse_term j coercee
-                       ; src_type = traverse_term j src_type
-                       ; tgt_type = traverse_term j tgt_type
-                       ; eq_proof = traverse_term j eq_proof
-                       }
-         }
+    and traverse_head j h =
+      match h with
+        | { head_data = Bound i } ->
+           { h with head_data = bound i j }
+        | { head_data = Free_global nm } ->
+           { h with head_data = free nm j }
+        | { head_data = Free_local _ } ->
+           h
+        | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } ->
+           { h with
+               head_data =
+                 Coerce { coercee  = traverse_term j coercee
+                        ; src_type = traverse_term j src_type
+                        ; tgt_type = traverse_term j tgt_type
+                        ; eq_proof = traverse_term j eq_proof
+                        } }
 
-    and traverse_elims j = function
-      | { elims_data = Nil } as es ->
-         { es with elims_data = Nil }
-      | { elims_data = App (elims, tm) } as es ->
-         { es with
-             elims_data = App (traverse_elims j elims, traverse_term j tm)
-         }
-      | { elims_data = ElimBool (elims, ty, tm_t, tm_f) } as es ->
-         { es with
-             elims_data = ElimBool (traverse_elims j elims,
-                                    binder traverse_term j ty,
-                                    traverse_term j tm_t,
-                                    traverse_term j tm_f)
-         }
-      | { elims_data = Project (elims, component) } as es ->
-         { es with
-             elims_data = Project (traverse_elims j elims, component)
-         }
-      | { elims_data = ElimNat (elims, ty, tm_z, tm_s) } as es ->
-         { es with
-             elims_data = ElimNat (traverse_elims j elims,
+    and traverse_elims j es =
+      match es with
+        | { elims_data = Nil } ->
+           { es with elims_data = Nil }
+        | { elims_data = App (elims, tm) } ->
+           { es with
+               elims_data = App (traverse_elims j elims, traverse_term j tm) }
+        | { elims_data = ElimBool (elims, ty, tm_t, tm_f) } as es ->
+           { es with
+               elims_data = ElimBool (traverse_elims j elims,
+                                      binder traverse_term j ty,
+                                      traverse_term j tm_t,
+                                      traverse_term j tm_f) }
+        | { elims_data = Project (elims, component) } ->
+           { es with
+               elims_data = Project (traverse_elims j elims, component) }
+        | { elims_data = ElimNat (elims, ty, tm_z, tm_s) } ->
+           { es with
+               elims_data = ElimNat (traverse_elims j elims,
+                                     binder traverse_term j ty,
+                                     traverse_term j tm_z,
+                                     binder (binder traverse_term) j tm_s) }
+        | { elims_data = ElimQ (elims, ty, tm, tm_eq) } ->
+           { es with
+               elims_data = ElimQ (traverse_elims j elims,
                                    binder traverse_term j ty,
-                                   traverse_term j tm_z,
-                                   binder (binder traverse_term) j tm_s)
-         }
-      | { elims_data = ElimQ (elims, ty, tm, tm_eq) } as es ->
-         { es with
-             elims_data = ElimQ (traverse_elims j elims,
-                                 binder traverse_term j ty,
-                                 binder traverse_term j tm,
-                                 binder (binder (binder traverse_term)) j tm_eq)
-         }
+                                   binder traverse_term j tm,
+                                   binder (binder (binder traverse_term)) j tm_eq) }
     in
     traverse_term j tm
 
