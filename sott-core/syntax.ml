@@ -457,6 +457,14 @@ let vsnd = function
   | _ ->
      failwith "internal error: type error in vsnd"
 
+let elimbool ty v_t v_f = function
+  | V_True            -> v_t
+  | V_False           -> v_f
+  | V_Neutral (h, es) ->
+     V_Neutral (h, E_If (es, ty, v_t, v_f))
+  | _ ->
+     failwith "internal error: type error in Bool elimination"
+
 let elimnat ty v_z v_s =
   let rec natrec = function
     | V_Zero   -> v_z
@@ -477,22 +485,14 @@ let elimq ty v = function
 
 let rec eval_elims t = function
   | E_Nil -> t
-  | E_App (es, v) -> apply (eval_elims t es) v
+  | E_App (es, v) ->
+     apply (eval_elims t es) v
   | E_If (es, ty, v_t, v_f) ->
-     (match eval_elims t es with
-       | V_True        -> v_t
-       | V_False       -> v_f
-       | V_Neutral (h, es) ->
-          V_Neutral (h, E_If (es, ty, v_t, v_f))
-       | _ ->
-          failwith "type error")
-  | E_Project (es, component) ->
-     (match eval_elims t es, component with
-       | V_Pair (v, _), `fst -> v
-       | V_Pair (_, v), `snd -> v
-       | V_Neutral (h, es), _ ->
-          V_Neutral (h, E_Project (es, component))
-       | _  -> failwith "internal error: type error in projection")
+     elimbool ty v_t v_f (eval_elims t es)
+  | E_Project (es, `fst) ->
+     vfst (eval_elims t es)
+  | E_Project (es, `snd) ->
+     vsnd (eval_elims t es)
   | E_ElimNat (es, ty, v_z, v_s) ->
      elimnat ty v_z v_s (eval_elims t es)
   | E_ElimQ (es, ty, v) ->
@@ -873,13 +873,11 @@ end = struct
       | App (elims, tm) ->
          apply (eval_elims scrutinee elims env) (eval tm env)
       | ElimBool (elims, ty, tm_t, tm_f) ->
-         (match eval_elims scrutinee elims env with
-           | V_True  -> eval tm_t env
-           | V_False -> eval tm_f env
-           | V_Neutral (h, es) ->
-              V_Neutral (h, E_If (es, binder eval ty env,
-                                  eval tm_t env, eval tm_f env))
-           | _ -> failwith "internal type error: eval_elims If")
+         elimbool
+           (binder eval ty env)
+           (eval tm_t env)
+           (eval tm_f env)
+           (eval_elims scrutinee elims env)
       | Project (elims, `fst) ->
          vfst (eval_elims scrutinee elims env)
       | Project (elims, `snd) ->
