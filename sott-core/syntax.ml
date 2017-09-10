@@ -1181,7 +1181,7 @@ and synthesise_elims_type ctxt h = function
   | { elims_data = Nil } ->
      synthesise_head_type ctxt h
 
-  | { elims_data = App (elims, tm); elims_loc } ->
+  | { elims_data = App (elims, tm) } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
       match expand_value ty with
         | V_Pi (s, VB (_, t)) ->
