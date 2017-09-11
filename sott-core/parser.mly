@@ -48,7 +48,7 @@ let build_elim elims = function
 %%
 
 file:
-  | definitions=list(definition); EOF
+  | definitions=definition*; EOF
     { definitions }
 
 definition:
@@ -64,31 +64,27 @@ binder:
   | UNDERSCORE
     { None }
 
+pi_binding:
+  | LPAREN; b=binder; COLON; tS=term; RPAREN
+    { (b, tS) }
+
 term:
-  | BACKSLASH; xs=nonempty_list(binder); ARROW; t=term
+  | BACKSLASH; xs=binder+; ARROW; t=term
+  | INTRODUCE; xs=binder+; COMMA; t=term
     { List.fold_right
          (fun x t -> { term_data = Lam (Scoping.bind x t)
-                     ; term_loc  = Location.generated })
+                     ; term_loc  = Location.generated (* FIXME *)})
          xs t }
-  | INTRODUCE; xs=nonempty_list(binder); COMMA; t=term
-    { List.fold_right
-         (fun x t -> { term_data = Lam (Scoping.bind x t)
-                     ; term_loc  = Location.generated })
-         xs t }
-  | bs=nonempty_list(pi_binding); ARROW; tT=term
+  | bs=pi_binding+; ARROW; tT=term
     { List.fold_right
          (fun (id, tS) tT -> { term_data = Pi (tS, Scoping.bind id tT)
-                             ; term_loc  = Location.generated })
+                             ; term_loc  = Location.generated (* FIXME *)})
          bs tT }
   | tS=app_term; ARROW; tT=term
     { { term_data = Pi (tS, Scoping.bind None tT)
       ; term_loc  = Location.mk $startpos $endpos } }
   | t=sigma_term
     { t }
-
-pi_binding:
-  | LPAREN; b=binder; COLON; tS=term; RPAREN
-    { (b, tS) }
 
 sigma_term:
   | LPAREN; id=binder; COLON; tS=term; RPAREN; ASTERISK; tT=sigma_term
@@ -113,7 +109,7 @@ quottype_term:
     { t }
 
 app_term:
-  | h=head; ts=nonempty_list(elim)
+  | h=head; ts=elim+
     { let h, es = h, Nil in
       { term_data = Neutral (h, List.fold_left build_elim nil ts)
       ; term_loc  = Location.mk $startpos $endpos } }
@@ -212,24 +208,25 @@ head:
 elim:
   | t=base_term
       { Apply (t, Location.mk $startpos $endpos) }
-  | FOR; x=binder; DOT; ty=term;
-      LBRACE; TRUE; ARROW; tm_t=term;
-   SEMICOLON; FALSE; ARROW; tm_f=term; option(SEMICOLON);
-      RBRACE
-      { ElimBool (Scoping.bind x ty, tm_t, tm_f, Location.mk $startpos $endpos) }
   | HASH_FST
       { Project (`fst, Location.mk $startpos $endpos) }
   | HASH_SND
       { Project (`snd, Location.mk $startpos $endpos) }
   | FOR; x=binder; DOT; ty=term;
-            LBRACE; ZERO; ARROW; tm_z=term;
-            SEMICOLON SUCC; n=binder; p=binder; ARROW; tm_s=term;
-            option(SEMICOLON);
-            RBRACE
+      LBRACE;
+      TRUE; ARROW; tm_t=term; SEMICOLON;
+      FALSE; ARROW; tm_f=term; SEMICOLON?;
+      RBRACE
+      { ElimBool (Scoping.bind x ty, tm_t, tm_f, Location.mk $startpos $endpos) }
+  | FOR; x=binder; DOT; ty=term;
+       LBRACE;
+       ZERO; ARROW; tm_z=term; SEMICOLON;
+       SUCC; n=binder; p=binder; ARROW; tm_s=term; SEMICOLON?;
+       RBRACE
       { ElimNat (Scoping.bind x ty, tm_z, Scoping.bind2 n p tm_s, Location.mk $startpos $endpos) }
   | FOR; x=binder; DOT; ty=term;
-       LBRACE; LSQBRACK; a=binder; RSQBRACK; ARROW; tm=term;
-    SEMICOLON; x1=binder; x2=binder; xr=binder; ARROW; tm_eq=term;
-       option(SEMICOLON);
+       LBRACE;
+       LSQBRACK; a=binder; RSQBRACK; ARROW; tm=term; SEMICOLON;
+       x1=binder; x2=binder; xr=binder; ARROW; tm_eq=term; SEMICOLON?;
        RBRACE
       { ElimQ (Scoping.bind x ty, Scoping.bind a tm, Scoping.bind3 x1 x2 xr tm_eq, Location.mk $startpos $endpos) }
