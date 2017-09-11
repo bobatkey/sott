@@ -13,13 +13,15 @@ let pp_failed_type_equation fmt (ctxt, ty1, ty2) =
 
 let pp_msg fmt = function
   | Syntax.Type_mismatch {loc; ctxt; computed_ty; expected_ty} ->
-     Format.fprintf fmt "type mismatch at %a: expected type @ @[<v 2>@,%a@,@]@ is not equal to computed type@ @[<v 2>@,%a@,@]"
+     Format.fprintf fmt
+       "type mismatch at %a: expected type @ @[<v 2>@,%a@,@]@ is not equal to computed type@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
        (* FIXME: these are meaningless without the context in which they occur *)
        Pprint.pp_term  expected_ty
        Pprint.pp_term  computed_ty
   | Syntax.Types_not_equal {loc; ctxt; ty1; ty2} ->
-     Format.fprintf fmt "types not equal at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]"
+     Format.fprintf fmt
+       "types not equal at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
        (* FIXME: these are meaningless without the context in which they occur *)
        Pprint.pp_term  ty1
@@ -42,7 +44,8 @@ let pp_msg fmt = function
        Location.pp_without_filename loc
        Pprint.pp_term               ty
   | Syntax.VarNotFound (loc, nm)  ->
-     Format.fprintf fmt "Variable '%s' not in scope at %a"
+     Format.fprintf fmt
+       "Variable '%s' not in scope at %a"
        nm
        Location.pp_without_filename loc
   | Syntax.MsgLoc (loc, msg) ->

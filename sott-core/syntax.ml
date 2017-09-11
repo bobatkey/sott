@@ -1047,8 +1047,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      Error (MsgLoc (term_loc,
                     "This term is expected to be a member of a quotient type, but isn't"))
 
-  | V_TyEq (ty1, ty2),
-    { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }; term_loc } ->
+  | V_TyEq (ty1, ty2), { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e } } ->
      is_type ctxt ty_s >>= fun () ->
      let ty_s = Evaluation.eval0 ctxt ty_s in
      (let _, ty_t, ctxt = ScopeClose.close ty_s ty_t ctxt in is_type ctxt ty_t)
@@ -1066,7 +1065,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
        Ok ()
      else
        (* FIXME: report the mismatched types here *)
-       Error (MsgLoc (term_loc, "type mismatch in subst"))
+       Error (MsgLoc (tm.term_loc, "type mismatch in subst"))
 
   | V_TyEq (ty1, ty2),
     { term_data = Refl; term_loc } ->
