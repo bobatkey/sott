@@ -92,15 +92,33 @@ let rec pprint_decls = function
      Format.print_newline ();
      pprint_decls decls
 
+let load_file filename =
+  let ch = open_in filename in
+  let lb = Lexing.from_channel ch in
+  try
+    let decls = Parser.file Lexer.program_token lb in
+    close_in ch;
+    Ok decls
+  with Parser.Error ->
+    close_in ch;
+    Error (Printf.sprintf "Parse error at line %d, column %d"
+             lb.Lexing.lex_curr_p.Lexing.pos_lnum
+             (lb.Lexing.lex_curr_p.Lexing.pos_cnum-
+              lb.Lexing.lex_curr_p.Lexing.pos_bol))
+
 let process_file filename =
-  let ch    = open_in filename in
-  let lb    = Lexing.from_channel ch in
-  let decls = Parser.file Lexer.program_token lb in
-  process_decls Syntax.Context.empty decls
+  match load_file filename with
+    | Ok decls ->
+       process_decls Syntax.Context.empty decls
+    | Error msg ->
+       Format.printf "ERR: %s\n" msg;
+       Error ()
 
 let pprint_file filename =
-  let ch    = open_in filename in
-  let lb    = Lexing.from_channel ch in
-  let decls = Parser.file Lexer.program_token lb in
-  Format.set_margin 100;
-  pprint_decls decls
+  match load_file filename with
+    | Ok decls ->
+       Format.set_margin 100;
+       pprint_decls decls
+    | Error msg ->
+       Format.printf "ERR: %s\n" msg;
+       Error ()
