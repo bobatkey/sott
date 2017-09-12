@@ -25,9 +25,10 @@ explosion of the sizes of types.
 1. [test1.sott](test1.sott) Derivation of `transport` from `coerce`;
    and a demonstration that Hofmann's counterexample to canonicity in
    the presence of a functional extensionality axiom fails in OTT.
-2. [test1.5.sott](test1.5.sott) Shortened version of [test1.sott].
-3. [test2.sott](test2.sott) An equality-proof irrelevance test; transivity and
-   symmetry; coherence.
+2. [test1.5.sott](test1.5.sott) Shortened version of
+   [test1.sott](test1.sott).
+3. [test2.sott](test2.sott) An equality-proof irrelevance test;
+   transivity and symmetry; coherence.
 4. [test3.sott](test3.sott) Encoding of sum types via booleans and
    sigma types; demonstration that the counterexample to canonicity
    involving constructors when adding functional extensionality fails
@@ -43,7 +44,7 @@ explosion of the sizes of types.
 2. Heterogeneous term equality, written `[a : A = b : B]`, where `A`
    and `B` are types. As a shorthand, if `A` is the same as `B`, then
    this can be written as `[a = b : A]`. All proofs of the same
-   equality are
+   equality are definitionally equal.
 
 3. Reflexivity for both type and term equality, written `refl`.
 
@@ -70,7 +71,7 @@ explosion of the sizes of types.
 
 8. Natural numbers: `Nat`, `Zero`, `Succ n` and `x for y. T
    { Zero -> e1; Succ n p -> e2 }`.
-   
+
 9. A Russell-style universe `Set`, which includes equalities,
    booleans, naturals, Pi, Sigma.
    
@@ -85,14 +86,17 @@ explosion of the sizes of types.
 
 ## Bugs/TODO
 
-1. The parser error messages are useless.
+1. The parser reports a line number on error, but otherwise the error
+   messages are useless. One day, I hope to use Menhir's fancy error
+   message support.
 
 2. Not every useful combinator for equalities is present. This is a
    matter of implementing them in the lexer/parser/typechecker.
 
 3. The normaliser is a bit too keen and unfolds all definitions
    whether it needs to or not. This leads to massive terms during type
-   checking, and especially in error messages.
-   
+   checking. Error messages are now reported without unfolded
+   definitions though, which makes them a bit easier to read.
+
 4. Type error messages don't include the context, and may output names
    that shadow names in the context, leading to incorrect terms.
