@@ -1,32 +1,19 @@
-let pp_ctxt fmt bindings =
-  Format.pp_open_vbox fmt 0;
-  bindings |> List.iter begin fun (nm, v) ->
-    Format.fprintf fmt
-      "@[  %s : %a]@,"
-      nm
-      Pprint.pp_term (Syntax.reify_type v 0)
-  end;
-  Format.pp_close_box fmt ()
-
-let pp_failed_type_equation fmt (ctxt, ty1, ty2) =
-  assert false
-
 let pp_msg fmt = function
-  | Syntax.Type_mismatch {loc; ctxt; computed_ty; expected_ty} ->
+  | Checker.Type_mismatch {loc; ctxt; computed_ty; expected_ty} ->
      Format.fprintf fmt
        "type mismatch at %a: expected type @ @[<v 2>@,%a@,@]@ is not equal to computed type@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
        (* FIXME: these are meaningless without the context in which they occur *)
        Pprint.pp_term  expected_ty
        Pprint.pp_term  computed_ty
-  | Syntax.Types_not_equal {loc; ctxt; ty1; ty2} ->
+  | Checker.Types_not_equal {loc; ctxt; ty1; ty2} ->
      Format.fprintf fmt
        "types not equal at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
        (* FIXME: these are meaningless without the context in which they occur *)
        Pprint.pp_term  ty1
        Pprint.pp_term  ty2
-  | Syntax.Term_mismatch (loc, ctxt, tm1, tm2, ty) ->
+  | Checker.Term_mismatch (loc, ctxt, tm1, tm2, ty) ->
      Format.fprintf fmt
        "terms not equal at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]@ at type@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
@@ -34,21 +21,21 @@ let pp_msg fmt = function
        Pprint.pp_term  tm1
        Pprint.pp_term  tm2
        Pprint.pp_term  ty
-  | Syntax.Term_is_not_a_type loc ->
+  | Checker.Term_is_not_a_type loc ->
      Format.fprintf fmt
        "term is not a type at %a"
        Location.pp_without_filename loc
-  | Syntax.BadApplication { loc; arg_loc; ctxt; ty } ->
+  | Checker.BadApplication { loc; arg_loc; ctxt; ty } ->
      Format.fprintf fmt
        "Application of a non function at %a: term has type@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
        Pprint.pp_term               ty
-  | Syntax.VarNotFound (loc, nm)  ->
+  | Checker.VarNotFound (loc, nm)  ->
      Format.fprintf fmt
        "Variable '%s' not in scope at %a"
        nm
        Location.pp_without_filename loc
-  | Syntax.MsgLoc (loc, msg) ->
+  | Checker.MsgLoc (loc, msg) ->
      Format.fprintf fmt "%s at %a"
        msg
        Location.pp_without_filename loc
@@ -57,23 +44,23 @@ let rec process_decls ctxt = function
   | [] ->
      Ok ()
   | `Def (id, ty, tm)::decls ->
-     (match Syntax.is_type ctxt ty with
+     (match Checker.is_type ctxt ty with
        | Error msg ->
           Format.eprintf "@[<v>ERR: Checking '%s''s type: %a@]\n%!"
             id
             pp_msg msg;
           Error ()
        | Ok () ->
-          let ty = Syntax.Evaluation.eval0 ctxt ty in
-          match Syntax.has_type ctxt ty tm with
+          let ty = Checker.Evaluation.eval0 ctxt ty in
+          match Checker.has_type ctxt ty tm with
             | Error msg ->
                Format.eprintf "@[<v>ERR: Checking '%s' body: %a@]\n%!"
                  id
                  pp_msg msg;
                Error ()
             | Ok () ->
-               let tm = Syntax.Evaluation.eval0 ctxt tm in
-               let ctxt = Syntax.Context.extend_with_defn id ~ty ~tm ctxt in
+               let tm = Checker.Evaluation.eval0 ctxt tm in
+               let ctxt = Checker.Context.extend_with_defn id ~ty ~tm ctxt in
                process_decls ctxt decls)
 
 let pprint_decl (`Def (id, ty, tm)) =
@@ -109,7 +96,7 @@ let load_file filename =
 let process_file filename =
   match load_file filename with
     | Ok decls ->
-       process_decls Syntax.Context.empty decls
+       process_decls Checker.Context.empty decls
     | Error msg ->
        Format.printf "ERR: %s\n" msg;
        Error ()
