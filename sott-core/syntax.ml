@@ -6,7 +6,7 @@ type term =
   }
 
 and term_data =
-  | Neutral of head * elims
+  | Neutral of head * elims * term Lazy.t option
 
   | Set
 
@@ -97,8 +97,17 @@ module AlphaEquality = struct
     k t1 t2
 
   let rec equal_term t1 t2 = match t1.term_data, t2.term_data with
-    | Neutral (h1, es1), Neutral (h2, es2) ->
-       equal_head h1 h2 && equal_elims es1 es2
+    | Neutral (h1, es1, reduced_opt1), Neutral (h2, es2, reduced_opt2) ->
+       (equal_head h1 h2 && equal_elims es1 es2)
+       || (match reduced_opt1, reduced_opt2 with
+           | None,           None           -> false
+           | Some (lazy t1), None           -> equal_term t1 t2
+           | None,           Some (lazy t2) -> equal_term t1 t2
+           | Some (lazy t1), Some (lazy t2) -> equal_term t1 t2)
+    | Neutral (_, _, Some (lazy t1)), _ ->
+       equal_term t1 t2
+    | _, Neutral (_, _, Some (lazy t2)) ->
+       equal_term t1 t2
     | Lam t1, Lam t2 ->
        binder equal_term t1 t2
     | Set, Set ->
@@ -248,8 +257,15 @@ end = struct
   let traverse ~free ~bound j tm =
     let rec traverse_term j tm =
       match tm with
-        | {term_data=Neutral (head, elims)} ->
-           { tm with term_data = Neutral (traverse_head j head, traverse_elims j elims) }
+        | {term_data=Neutral (head, elims, reduced_opt)} ->
+           { tm with
+               term_data =
+                 Neutral (traverse_head j head,
+                          traverse_elims j elims,
+                          match reduced_opt with
+                            | None -> None
+                            | Some reduced ->
+                               Some (lazy (traverse_term j (Lazy.force reduced)))) }
         | {term_data = Lam t} ->
            { tm with term_data = Lam (binder traverse_term j t) }
         | {term_data = Pi (s, t)} ->

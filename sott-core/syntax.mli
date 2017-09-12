@@ -11,7 +11,7 @@ type term =
   }
 
 and term_data =
-  | Neutral of head * elims
+  | Neutral of head * elims * term Lazy.t option
 
   | Set
 

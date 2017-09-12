@@ -166,7 +166,7 @@ let rec coerce v src tgt = match v, expand_value src, expand_value tgt with
    equality? This would mean that we wouldn't need to use the 'Irrel'
    constructor. *)
 
-let reifiers ~unfold_defns =
+let reifiers ~eta_expand =
   let rec reify_type v i = match v with
     | V_Pi (s, VB (x, t)) ->
        mk_term (Pi (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
@@ -202,22 +202,22 @@ let reifiers ~unfold_defns =
     | V_Pi (s, VB (x, t)), f ->
        let v = var s i in
        mk_term (Lam (B (x, reify (t v) (apply f v) (i+1))))
-    | V_Sigma (s, VB (_, t)), p when unfold_defns ->
+    | V_Sigma (s, VB (_, t)), p when eta_expand ->
        mk_term (Pair (reify s (vfst p) i, reify (t (vfst p)) (vsnd p) i))
     | V_Sigma (s, VB (_, t)), V_Pair (a, b) ->
        mk_term (Pair (reify s a i, reify (t a) b i))
     | V_TyEq _, v
-    | V_TmEq _, v       ->
+    | V_TmEq _, v ->
        mk_term Irrel
-    | V_Bool,   V_True  ->
+    | V_Bool, V_True ->
        mk_term True
-    | V_Bool,   V_False ->
+    | V_Bool, V_False ->
        mk_term False
     | V_Nat, V_Zero ->
        mk_term Zero
     | V_Nat, V_Succ n ->
        mk_term (Succ (reify V_Nat n i))
-    | V_Set,    v ->
+    | V_Set, v ->
        reify_type v i
     | V_QuotType (t, _), V_QuotIntro v ->
        mk_term (QuotIntro (reify t v i))
@@ -230,23 +230,20 @@ let reifiers ~unfold_defns =
     | H_Var { shift; typ } ->
        let es, _ = reify_elims h typ es i in
        let h     = mk_head (Bound (i-shift-1)) in
-       mk_term (Neutral (h, es))
+       mk_term (Neutral (h, es, None))
     | H_Free_local { name; typ } ->
        let es, _ = reify_elims h typ es i in
        let h     = mk_head (Free_local name) in
-       mk_term (Neutral (h, es))
+       mk_term (Neutral (h, es, None))
     | H_Free_global { name; typ; defn = None } ->
        let es, _ = reify_elims h typ es i in
        let h     = mk_head (Free_global name) in
-       mk_term (Neutral (h, es))
+       mk_term (Neutral (h, es, None))
     | H_Free_global { name; typ; defn = Some defn } ->
-       if unfold_defns then
-         let _, ty = reify_elims h typ es i in
-         reify ty (eval_elims defn es) i
-       else
-         let es, _ = reify_elims h typ es i in
-         let h     = mk_head (Free_global name) in
-         mk_term (Neutral (h, es))
+       let es', ty = reify_elims h typ es i in
+       let h       = mk_head (Free_global name) in
+       let reduced = lazy (reify ty (eval_elims defn es) i) in
+       mk_term (Neutral (h, es', Some reduced))
     | H_Coe { coercee; src_type; tgt_type } ->
        let es_tm, ty = reify_elims h tgt_type es i in
        let ty1_tm = reify_type src_type i in
@@ -259,7 +256,7 @@ let reifiers ~unfold_defns =
                                  ; tgt_type = ty2_tm
                                  ; eq_proof = mk_term Irrel })
          in
-         mk_term (Neutral (h, es_tm))
+         mk_term (Neutral (h, es_tm, None))
 
   (* FIXME: this unfolds too much??? *)
   and reify_elims h ty es i =
@@ -330,8 +327,8 @@ let reifiers ~unfold_defns =
   in
   reify_type, reify
 
-let reify_type, reify = reifiers ~unfold_defns:true
-let reify_type_small, reify_small = reifiers ~unfold_defns:false
+let reify_type, reify = reifiers ~eta_expand:true
+let reify_type_small, reify_small = reifiers ~eta_expand:false
 
 let equal_types ty1 ty2 =
   let ty1 = reify_type ty1 0 in
@@ -457,7 +454,7 @@ end = struct
 
   let evaluate ctxt tm =
     let rec eval tm env = match tm.term_data with
-      | Neutral (h, es) -> eval_elims (eval_head h env) es env
+      | Neutral (h, es, _) -> eval_elims (eval_head h env) es env
       | Lam t           -> V_Lam (binder eval t env)
       | Set             -> V_Set
       | Pi (t1, t2)     -> V_Pi (eval t1 env, binder eval t2 env)
@@ -597,7 +594,7 @@ let rec is_type ctxt = function
      has_type ctxt ty2 tm2 >>= fun () ->
      Ok ()
 
-  | { term_data = Neutral (h, es); term_loc } ->
+  | { term_data = Neutral (h, es, _); term_loc } ->
      (synthesise_elims_type ctxt h es >>= function
        | V_Set ->
           Ok ()
@@ -610,7 +607,7 @@ let rec is_type ctxt = function
      Error (Term_is_not_a_type term_loc)
 
 and has_type ctxt ty tm = match expand_value ty, tm with
-  | ty, { term_data = Neutral (h, elims); term_loc } ->
+  | ty, { term_data = Neutral (h, elims, _); term_loc } ->
      synthesise_elims_type ctxt h elims >>= fun ty' ->
      if equal_types ty ty' then
        Ok ()
@@ -846,7 +843,7 @@ and synthesise_elims_type ctxt h = function
            let ty = Evaluation.eval1 ctxt elim_ty in
            has_type ctxt (ty V_True) tm_t >>= fun () ->
            has_type ctxt (ty V_False) tm_f >>= fun () ->
-           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
         | _ ->
            (* FIXME: custom error message for this kind of bad elimination *)
            Error (MsgLoc (elims_loc, "attempt to eliminate non boolean")))
@@ -868,7 +865,7 @@ and synthesise_elims_type ctxt h = function
                 ctxt
             in
             has_type ctxt (ty (V_Succ n)) tm_s) >>= fun () ->
-           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
         | _ ->
            Error (MsgLoc (elims_loc, "attempt to eliminate non natural")))
 
@@ -895,7 +892,7 @@ and synthesise_elims_type ctxt h = function
             has_type ctxt (V_TmEq { s = tm x1; s_ty = ty (V_QuotIntro x1)
                                   ; t = tm x2; t_ty = ty (V_QuotIntro x2) }) tm_eq)
            >>= fun () ->
-           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims)))))
+           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
         | _ ->
            Error (MsgLoc (elims_loc, "attempt to eliminate non quotient value")))
 
@@ -917,7 +914,7 @@ and synthesise_elims_type ctxt h = function
      (synthesise_elims_type ctxt h elims >>= fun ty ->
       match expand_value ty with
         | V_Sigma (s, VB (_, t)) ->
-           Ok (t (vfst (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims))))))
+           Ok (t (vfst (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None))))))
         | V_TyEq (V_Pi (s, VB (x, t)), V_Pi (s', VB (x', t')))
         | V_TyEq (V_Sigma (s, VB (x, t)), V_Sigma (s', VB (x', t'))) ->
            Ok (V_Pi (s, VB (x, fun vs ->

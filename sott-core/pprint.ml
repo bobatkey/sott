@@ -117,7 +117,7 @@ and pp_app_term ctxt fmt tm =
               "Succ %a"
               (pp_base_term ctxt) tm)
 
-    | Neutral (h, elims) when elims.elims_data <> Nil ->
+    | Neutral (h, elims, _) when elims.elims_data <> Nil ->
        Format.fprintf fmt
          "@[<v>%a@]"
          (pp_elims ctxt) (h, elims)
@@ -163,7 +163,7 @@ and pp_base_term ctxt fmt tm =
        Format.fprintf fmt
          "[%a]"
          (pp_term ctxt) tm
-    | Neutral (h, {elims_data=Nil}) ->
+    | Neutral (h, {elims_data=Nil}, _) ->
        pp_head ctxt fmt h
 
     | Pair (t1, t2) ->
