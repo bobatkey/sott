@@ -249,11 +249,11 @@ and pp_elims ctxt fmt (head, elims) =
          (pp_term ctxt)      tm_f
     | Project (elims, `fst) ->
        Format.fprintf fmt
-         "%a#fst"
+         "%a #fst"
          (pp_elims ctxt) (head, elims)
     | Project (elims, `snd) ->
        Format.fprintf fmt
-         "%a#snd"
+         "%a #snd"
          (pp_elims ctxt) (head, elims)
     | ElimNat (elims, ty, tm_z, tm_s) ->
        let ty_nm, ty, ty_ctxt = Scope.close ty ctxt in
