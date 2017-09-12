@@ -98,7 +98,7 @@ and pp_quottype_term ctxt fmt tm =
          (pp_app_term ctxt)      r
 
     | _ ->
-      pp_app_term ctxt fmt tm
+       pp_app_term ctxt fmt tm
 
 and pp_app_term ctxt fmt tm =
   match tm.term_data with
@@ -167,17 +167,28 @@ and pp_base_term ctxt fmt tm =
        pp_head ctxt fmt h
 
     | Pair (t1, t2) ->
-       (* FIXME: right nested pairs *)
+       let rec pp fmt tm =
+         match tm.term_data with
+           | Pair (t1, t2) ->
+              Format.fprintf fmt
+                "%a, %a"
+                (pp_term ctxt) t1
+                pp             t2
+           | _ ->
+              Format.fprintf fmt
+                "%a)"
+                (pp_term ctxt) tm
+       in
        Format.fprintf fmt
-         "(%a, %a)"
+         "(%a, %a"
          (pp_term ctxt) t1
-         (pp_term ctxt) t2
+         pp             t2
 
     | Subst { ty_s; ty_t; tm_x; tm_y; tm_e } ->
        let nm, ty_t, ty_ctxt = Scope.close ty_t ctxt in
        Format.fprintf fmt
          "subst(@[<hov>@[%a,@,%s.%a,@]@,@[%a,@,%a,@,%a@]@])"
-         (pp_term ctxt) ty_s
+         (pp_term ctxt)    ty_s
          nm
          (pp_term ty_ctxt) ty_t
          (pp_term ctxt)    tm_x
@@ -190,7 +201,10 @@ and pp_base_term ctxt fmt tm =
          (pp_term ctxt) prf
     | Funext prf ->
        let x1, x2, xe, prf, ctxt = Scope.close3 prf ctxt in
-       Format.fprintf fmt "@[<hov 2>funext@,(@[<v>%s %s %s.@ %a@])@]" x1 x2 xe (pp_term ctxt) prf
+       Format.fprintf fmt
+         "@[<hov 2>funext@,(@[<v>%s %s %s.@ %a@])@]"
+         x1 x2 xe
+         (pp_term ctxt) prf
     | SameClass prf ->
        Format.fprintf fmt "@[<2>same-class@,(%a)@]"
          (pp_term ctxt) prf
