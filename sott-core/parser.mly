@@ -7,6 +7,7 @@ type elim =
   | ElimBool of term binder * term * term * Location.t
   | ElimNat  of term binder * term * term binder binder * Location.t
   | ElimQ    of term binder * term binder * term binder binder binder * Location.t
+  | ElimEmp  of term * Location.t
 
 let nil =
   { elims_data = Nil; elims_loc = Location.generated }
@@ -22,6 +23,8 @@ let build_elim elims = function
      { elims_data = ElimNat (elims, ty, tm_z, tm_s); elims_loc }
   | ElimQ (ty, tm, tm_eq, elims_loc) ->
      { elims_data = ElimQ (elims, ty, tm, tm_eq); elims_loc }
+  | ElimEmp (ty, elims_loc) ->
+     { elims_data = ElimEmp (elims, ty); elims_loc }
 %}
 
 %token <string> IDENT
@@ -34,7 +37,7 @@ let build_elim elims = function
 %token HASH_FST HASH_SND
 %token NAT ZERO SUCC
 %token SAME_CLASS
-%token SET
+%token SET EMPTY
 %token DEFINE AS
 %token INTRODUCE USE
 %token COERCE
@@ -165,6 +168,9 @@ base_term:
          | i -> build_nat { term_data = Succ n; term_loc } (i-1)
       in
       build_nat { term_data = Zero; term_loc } n }
+  | EMPTY
+    { { term_data = Empty
+      ; term_loc  = Location.mk $startpos $endpos } }
   | LSQBRACK; ty1=term; EQUALS; ty2=term; RSQBRACK
     { { term_data = TyEq (ty1, ty2)
       ; term_loc  = Location.mk $startpos $endpos } }
@@ -230,3 +236,5 @@ elim:
        x1=binder; x2=binder; xr=binder; ARROW; tm_eq=term; SEMICOLON?;
        RBRACE
       { ElimQ (Scoping.bind x ty, Scoping.bind a tm, Scoping.bind3 x1 x2 xr tm_eq, Location.mk $startpos $endpos) }
+  | FOR; ty=term; LBRACE; RBRACE
+      { ElimEmp (ty, Location.mk $startpos $endpos) }

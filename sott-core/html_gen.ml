@@ -5,7 +5,7 @@ open Parser
 let class_of_token = function
   | SET | BOOL | TRUE | FALSE | NAT | ZERO | SUCC
   | REFL | COH | SUBST | FUNEXT | SAME_CLASS
-  | SLASH | INTRODUCE ->
+  | SLASH | INTRODUCE | EMPTY ->
      "constructor"
   | HASH_FST | HASH_SND | COERCE | FOR | USE ->
      "eliminator"

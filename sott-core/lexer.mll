@@ -34,6 +34,7 @@ rule token = parse
 | "Nat"        { `Token NAT }
 | "Zero"       { `Token ZERO }
 | "Succ"       { `Token SUCC }
+| "Empty"      { `Token EMPTY }
 | "same-class" { `Token SAME_CLASS }
 | "/"          { `Token SLASH }
 | "for"        { `Token FOR }

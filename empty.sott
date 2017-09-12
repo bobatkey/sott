@@ -1,0 +1,5 @@
+define ex_falso : (A : Set) -> Empty -> A
+as introduce A impossible,
+   use impossible for A {
+   }
+

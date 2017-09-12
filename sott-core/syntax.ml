@@ -27,6 +27,8 @@ and term_data =
   | Zero
   | Succ of term
 
+  | Empty
+
   | TyEq of term * term
   | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
 
@@ -73,6 +75,7 @@ and elims_data =
   | ElimBool of elims * term binder * term * term
   | ElimNat  of elims * term binder * term * term binder binder
   | ElimQ    of elims * term binder * term binder * term binder binder binder
+  | ElimEmp  of elims * term
 
 let mk_elim elims_data =
   { elims_data; elims_loc = Location.generated }
@@ -115,7 +118,8 @@ module AlphaEquality = struct
     | True, True
     | False, False
     | Nat, Nat
-    | Zero, Zero ->
+    | Zero, Zero
+    | Empty, Empty ->
        true
     | Succ t1, Succ t2 ->
        equal_term t1 t2
@@ -183,6 +187,9 @@ module AlphaEquality = struct
        binder equal_term ty ty' &&
        binder equal_term tm tm' &&
        binder (binder (binder equal_term)) tm_eq tm_eq'
+    | ElimEmp (es, ty), ElimEmp (es', ty') ->
+       equal_elims es es' &&
+       equal_term ty ty'
     | Project (es, dir), Project (es', dir') ->
        dir = dir' && equal_elims es es'
     | _, _ ->
@@ -264,7 +271,7 @@ end = struct
                                 ; tm2 = traverse_term j tm2
                                 ; ty2 = traverse_term j ty2
                                 } }
-        | {term_data = Bool | True | False | Nat | Zero | Refl | Set} ->
+        | {term_data = Bool | True | False | Nat | Zero | Refl | Set | Empty} ->
            tm
         | {term_data = Succ t} ->
            { tm with term_data = Succ (traverse_term j t) }
@@ -283,7 +290,7 @@ end = struct
         | {term_data = Coh prf} ->
            { tm with term_data = Coh (traverse_term j prf) }
         | {term_data = Irrel} ->
-           failwith "internal error: attempt to traverse an erased proof term"
+           tm
 
     and traverse_head j h =
       match h with
@@ -330,6 +337,9 @@ end = struct
                                    binder traverse_term j ty,
                                    binder traverse_term j tm,
                                    binder (binder (binder traverse_term)) j tm_eq) }
+        | { elims_data = ElimEmp (elims, ty) } ->
+           { es with elims_data = ElimEmp (traverse_elims j elims,
+                                           traverse_term j ty) }
     in
     traverse_term j tm
 
@@ -389,5 +399,3 @@ end = struct
   end
 
 end
-
-(******************************************************************************)

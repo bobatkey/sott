@@ -1,0 +1,24 @@
+define Zero_ne_Succ : (A:Set)(n:Nat) -> [ 0 = Succ n : Nat ] -> A
+as introduce A n eq,
+   coerce(Zero,
+          Nat,
+          A,
+          subst(Nat, x. x for _. Set { Zero -> Nat; Succ _ _ -> A },
+                Zero,
+                Succ n,
+                use eq))
+
+define oddity : [ \x -> Zero_ne_Succ Nat Zero x = \x -> 0
+                : [ 0 = 1 : Nat] -> Nat ]
+as refl
+
+
+define Zero_ne_Succ2 : (n:Nat) -> [ Zero = Succ n : Nat ] -> Empty
+as introduce n eq,
+   coerce(Zero,
+          Nat,
+          Empty,
+          subst(Nat, x. x for _. Set { Zero -> Nat; Succ _ _ -> Empty },
+                Zero,
+                Succ n,
+                use eq))

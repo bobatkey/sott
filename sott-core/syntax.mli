@@ -32,6 +32,8 @@ and term_data =
   | Zero
   | Succ of term
 
+  | Empty
+
   | TyEq of term * term
   | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
 
@@ -78,6 +80,7 @@ and elims_data =
   | ElimBool of elims * term binder * term * term
   | ElimNat  of elims * term binder * term * term binder binder
   | ElimQ    of elims * term binder * term binder * term binder binder binder
+  | ElimEmp  of elims * term
 
 (**{2 Terms with generated locations}
 

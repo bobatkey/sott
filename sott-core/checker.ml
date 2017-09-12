@@ -19,6 +19,7 @@ type value =
   | V_Pi      of value * value v_binder
   | V_Sigma   of value * value v_binder
   | V_Pair    of value * value
+  | V_Empty
   | V_TyEq    of value * value
   | V_TmEq    of { s : value; s_ty : value; t : value; t_ty : value }
   | V_Irrel
@@ -33,6 +34,7 @@ and v_elims =
   | E_Project of v_elims * [`fst|`snd]
   | E_ElimNat of v_elims * value v_binder * value * value v_binder v_binder
   | E_ElimQ   of v_elims * value v_binder * value v_binder
+  | E_ElimEmp of v_elims * value
 
 and v_head =
   | H_Var of { shift : shift; typ : value }
@@ -92,6 +94,12 @@ let elimq ty v = function
   | _ ->
      failwith "internal error: type error in quotient value elimination"
 
+let elimemp ty = function
+  | V_Neutral (h, es) ->
+     V_Neutral (h, E_ElimEmp (es, ty))
+  | _ ->
+     failwith "internal error: type error in Empty type elimination"
+
 let rec eval_elims t = function
   | E_Nil -> t
   | E_App (es, v) ->
@@ -106,6 +114,8 @@ let rec eval_elims t = function
      elimnat ty v_z v_s (eval_elims t es)
   | E_ElimQ (es, ty, v) ->
      elimq ty v (eval_elims t es)
+  | E_ElimEmp (es, ty) ->
+     elimemp ty (eval_elims t es)
 
 let rec expand_value = function
   | V_Neutral (H_Free_global { defn = Some defn }, es) ->
@@ -126,6 +136,7 @@ let rec coerce v src tgt = match v, expand_value src, expand_value tgt with
   | v, V_Bool, V_Bool -> v
   | v, V_Set,  V_Set  -> v
   | n, V_Nat, V_Nat -> n
+  | e, V_Empty, V_Empty -> e
   | f, V_Pi (ty_s, VB (_, ty_t)), V_Pi (ty_s', VB (x, ty_t')) ->
      let x = match f with V_Lam (VB (x, _)) -> x | _ -> x in
      V_Lam
@@ -152,7 +163,8 @@ let rec coerce v src tgt = match v, expand_value src, expand_value tgt with
 
 (**********************************************************************)
 (* FIXME: equality test rather than reify to term and check for alpha
-   equality? *)
+   equality? This would mean that we wouldn't need to use the 'Irrel'
+   constructor. *)
 
 let reifiers ~unfold_defns =
   let rec reify_type v i = match v with
@@ -166,6 +178,8 @@ let reifiers ~unfold_defns =
        mk_term Bool
     | V_Nat ->
        mk_term Nat
+    | V_Empty ->
+       mk_term Empty
     | V_QuotType (ty, r) ->
        mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set) r i))
     | V_TyEq (s, t) ->
@@ -272,6 +286,9 @@ let reifiers ~unfold_defns =
          | _ ->
             failwith "internal error: type error reifying bool case switch")
     | E_Project (es, component) ->
+       (* Note: we don't need to check for the projections from type
+          equalities cases here because they will have been erased
+          during evaluation. *)
        (match reify_elims h ty es i, component with
          | (reified_es, V_Sigma (s, _)), `fst ->
             mk_elim (Project (reified_es, `fst)), s
@@ -303,6 +320,13 @@ let reifiers ~unfold_defns =
             elim_ty (V_Neutral (h, es))
          | _ ->
             failwith "internal error: type error reifying quotient elim")
+    | E_ElimEmp (es, ty) ->
+       (match reify_elims h ty es i with
+         | es', V_Empty ->
+            mk_elim (ElimEmp (es', reify_type ty i)),
+            ty
+         | _ ->
+            failwith "internal error: type error reifying empty elim")
   in
   reify_type, reify
 
@@ -452,7 +476,7 @@ end = struct
       | Nat   -> V_Nat
       | Zero  -> V_Zero
       | Succ t -> V_Succ (eval t env)
-
+      | Empty -> V_Empty
       | QuotType (ty, r) ->
          V_QuotType (eval ty env, eval r env)
       | QuotIntro tm ->
@@ -501,6 +525,10 @@ end = struct
          elimq
            (binder eval ty env)
            (binder eval tm env)
+           (eval_elims scrutinee elims env)
+      | ElimEmp (elims, ty) ->
+         elimemp
+           (eval ty env)
            (eval_elims scrutinee elims env)
     in
     eval tm
@@ -553,6 +581,9 @@ let rec is_type ctxt = function
      let ty = Evaluation.eval0 ctxt ty in
      has_type ctxt (ty @-> ty @-> V_Set) r
 
+  | { term_data = Empty } ->
+     Ok ()
+
   | { term_data = TyEq (s, t) } ->
      is_type ctxt s >>= fun () ->
      is_type ctxt t
@@ -604,7 +635,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
   | V_Sigma _, { term_loc } ->
      Error (MsgLoc (term_loc, "This term is expected to be a pair, but isn't"))
 
-  | V_Set, { term_data = Bool | Nat } ->
+  | V_Set, { term_data = Bool | Nat | Empty } ->
      Ok ()
 
   | V_Set, { term_data = Pi (s, t) } ->
@@ -655,6 +686,10 @@ and has_type ctxt ty tm = match expand_value ty, tm with
   | V_QuotType (ty, _), { term_loc } ->
      Error (MsgLoc (term_loc,
                     "This term is expected to be a member of a quotient type, but isn't"))
+
+  | V_Empty, { term_loc } ->
+     Error (MsgLoc (term_loc,
+                    "This term is expected to be an inhabitant of the empty type, but (invevitably) isn't."))
 
   | V_TyEq (ty1, ty2), { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e } } ->
      is_type ctxt ty_s >>= fun () ->
@@ -892,3 +927,12 @@ and synthesise_elims_type ctxt h = function
                              V_TyEq (t vs, t' vs'))))))))
         | _ ->
            Error (MsgLoc (elims_loc, "attempt to project #snd from expression of non pair type")))
+
+  | { elims_data = ElimEmp (elims, elim_ty); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+        | V_Empty ->
+           is_type ctxt elim_ty >>= fun () ->
+           Ok (Evaluation.eval0 ctxt elim_ty)
+        | _ ->
+           Error (MsgLoc (elims_loc, "attempt to do empty type elimination on expression of non Empty type")))

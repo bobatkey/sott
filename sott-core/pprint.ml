@@ -139,6 +139,8 @@ and pp_base_term ctxt fmt tm =
        Format.fprintf fmt "Nat"
     | Zero ->
        Format.fprintf fmt "0"
+    | Empty ->
+       Format.fprintf fmt "Empty"
     | TyEq (t1, t2) ->
        Format.fprintf fmt
          "@[[%a@ = %a]@]"
@@ -263,6 +265,11 @@ and pp_elims ctxt fmt (head, elims) =
          (pp_term tm_ctxt)  tm
          eq_nm1 eq_nm2 eq_nm3
          (pp_term eq_ctxt)  eq
+    | ElimEmp (elims, ty) ->
+       Format.fprintf fmt
+         "@[<v 2>%a for %a. { }@]"
+         (pp_elims ctxt) (head, elims)
+         (pp_term ctxt)  ty
 
 let pp_term fmt tm =
   (* FIXME: this ought to only work in a context, so we know what
