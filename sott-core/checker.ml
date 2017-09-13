@@ -544,7 +544,16 @@ type error_message =
   | Term_is_not_a_type of Location.t
   | Term_mismatch of Location.t * Context.t * term * term * term
   | VarNotFound of Location.t * string
-  | BadApplication of { loc : Location.t; arg_loc : Location.t; ctxt : Context.t; ty : term }
+  | BadApplication of
+      { loc     : Location.t
+      ; arg_loc : Location.t
+      ; ctxt    : Context.t
+      ; ty      : term }
+  | BadProject of
+      { loc : Location.t
+      ; hd_loc : Location.t
+      ; ctxt   : Context.t
+      ; ty     : term }
   | MsgLoc of Location.t * string
 
 module ScopeClose = Scoping.Close (Context)
@@ -905,10 +914,11 @@ and synthesise_elims_type ctxt h = function
            Ok (V_TyEq (s',s))
         | V_TyEq (V_Sigma (s,t), V_Sigma (s',t')) ->
            Ok (V_TyEq (s,s'))
-        | _ ->
-           let _loc1 = location_of_neutral h elims in
-           let _loc2 = elims_loc in
-           Error (MsgLoc (elims_loc, "attempt to project #fst from expression of non pair type")))
+        | ty ->
+           let ty     = reify_type_small ty 0 in
+           let hd_loc = location_of_neutral h elims in
+           let loc = elims_loc in
+           Error (BadProject {loc;hd_loc;ctxt;ty}))
 
   | { elims_data = Project (elims, `snd); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -923,7 +933,10 @@ and synthesise_elims_type ctxt h = function
                          VB (x^"_"^x', fun _ ->
                              V_TyEq (t vs, t' vs'))))))))
         | _ ->
-           Error (MsgLoc (elims_loc, "attempt to project #snd from expression of non pair type")))
+           let ty     = reify_type_small ty 0 in
+           let hd_loc = location_of_neutral h elims in
+           let loc    = elims_loc in
+           Error (BadProject {loc;hd_loc;ctxt;ty}))
 
   | { elims_data = ElimEmp (elims, elim_ty); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->

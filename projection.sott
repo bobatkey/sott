@@ -1,0 +1,19 @@
+define test :
+  (A:Set)(B:Set)(A':Set)(B':Set) -> [A -> B = A' -> B'] -> [A' = A]
+as introduce A B A' B' eq,
+   eq #fst
+
+define test2 :
+  (A:Set)(B:Set)(A':Set)(B':Set)(eq:[A -> B = A' -> B'])(eq' : [A' = A]) ->
+  [ test A B A' B' eq = eq' : [A' = A]]
+as introduce A B A' B' eq eq',
+   use refl
+
+define triple : Nat * Nat * Nat
+as (1, 2, 3)
+
+(*define triple_eq : [ triple = (3,2,1) : Nat * Nat * Nat ]
+as refl*)
+
+define bad_project : Nat -> Nat
+as introduce x, x#fst

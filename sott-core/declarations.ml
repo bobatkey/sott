@@ -30,6 +30,11 @@ let pp_msg fmt = function
        "Application of a non function at %a: term has type@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
        Pprint.pp_term               ty
+  | Checker.BadProject { loc; hd_loc; ctxt; ty } ->
+     Format.fprintf fmt
+       "bad projection at %a: term has type@ @[<v 2>@,%a@,@]@ which does not support projection."
+       Location.pp_without_filename loc
+       Pprint.pp_term               ty
   | Checker.VarNotFound (loc, nm)  ->
      Format.fprintf fmt
        "Variable '%s' not in scope at %a"
