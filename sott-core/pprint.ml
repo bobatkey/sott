@@ -29,6 +29,25 @@ module Scope = struct
   let close3 = close3 () (fun _ -> ()) (fun _ _ -> ())
 end
 
+let pp_iter iter ~sep pp fmt container =
+  let first = ref true in
+  container |> iter begin fun a ->
+    if not !first then Format.fprintf fmt sep;
+    first := false;
+    pp fmt a
+  end
+
+let pp_bindings iter ~sep pp fmt container =
+  let first = ref true in
+  container |> iter begin fun a b ->
+    if not !first then Format.fprintf fmt sep;
+    first := false;
+    pp fmt (a,b)
+  end
+
+let pp_tag fmt =
+  Format.fprintf fmt "`%s"
+
 let rec pp_term ctxt fmt tm =
   match tm.term_data with
     | Lam term ->
@@ -163,6 +182,12 @@ and pp_base_term ctxt fmt tm =
        Format.fprintf fmt
          "[%a]"
          (pp_term ctxt) tm
+    | TagType tags ->
+       Format.fprintf fmt
+         "{%a}"
+         (pp_iter TagSet.iter ~sep:",@ " pp_tag) tags
+    | Tag tag ->
+       pp_tag fmt tag
     | Neutral (h, {elims_data=Nil}, _) ->
        pp_head ctxt fmt h
 
@@ -284,6 +309,20 @@ and pp_elims ctxt fmt (head, elims) =
          "@[<v 2>%a for %a. { }@]"
          (pp_elims ctxt) (head, elims)
          (pp_term ctxt)  ty
+    | ElimTag (elims, ty, clauses) ->
+       let ty_nm, ty, ty_ctxt = Scope.close ty ctxt in
+       Format.fprintf fmt
+         "@[<v 2>%a for %s. %a {@,%a@]@,}"
+         (pp_elims ctxt) (head, elims)
+         ty_nm (pp_term ty_ctxt) ty
+         (pp_bindings TagMap.iter ~sep:"" (pp_clause ctxt)) clauses
+
+and pp_clause ctxt fmt (tag, term) =
+  Format.fprintf fmt
+    "@[<v 3>%s ->@ %a;@]"
+    tag
+    (pp_term ctxt) term
+    
 
 let pp_term fmt tm =
   (* FIXME: this ought to only work in a context, so we know what

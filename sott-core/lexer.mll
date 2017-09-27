@@ -17,6 +17,8 @@ rule token = parse
 | ')'          { `Token RPAREN }
 | '{'          { `Token LBRACE }
 | '}'          { `Token RBRACE }
+| "{|"         { `Token LBRACEPIPE }
+| "|}"         { `Token PIPERBRACE }
 | '['          { `Token LSQBRACK }
 | ']'          { `Token RSQBRACK }
 | '='          { `Token EQUALS }
@@ -51,6 +53,7 @@ rule token = parse
 | "#snd"       { `Token HASH_SND }
 | natural      { `Token (NATURAL (int_of_string (Lexing.lexeme lexbuf))) }
 | id           { `Token (IDENT (Lexing.lexeme lexbuf)) }
+| '`' (id as id) { `Token (TAG id) }
 | "(*"         { comment lexbuf; `Comment }
 | eof          { `Token EOF }
 

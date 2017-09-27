@@ -2,6 +2,18 @@
 
 (**{1 Syntax} *)
 
+type tag = string
+type tag_set
+type +'a tag_map
+
+module TagSet : Set.S
+  with type t = tag_set
+   and type elt = tag
+
+module TagMap : Map.S
+  with type 'a t = 'a tag_map
+   and type key = tag
+
 type 'a binder =
   | B  of string * 'a
 
@@ -31,6 +43,9 @@ and term_data =
   | Nat
   | Zero
   | Succ of term
+
+  | TagType of tag_set
+  | Tag of tag
 
   | Empty
 
@@ -81,6 +96,7 @@ and elims_data =
   | ElimNat  of elims * term binder * term * term binder binder
   | ElimQ    of elims * term binder * term binder * term binder binder binder
   | ElimEmp  of elims * term
+  | ElimTag  of elims * term binder * term tag_map
 
 (**{2 Terms with generated locations}
 

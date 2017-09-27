@@ -1,3 +1,15 @@
+module Tag = struct
+  type t = string
+  let compare = String.compare
+  let equal = String.equal
+end
+module TagMap = Map.Make (Tag)
+module TagSet = Set.Make (Tag)
+
+type tag = Tag.t
+type tag_set = TagSet.t
+type 'a tag_map = 'a TagMap.t
+
 type 'a binder = B of string * 'a
 
 type term =
@@ -26,6 +38,9 @@ and term_data =
   | Nat
   | Zero
   | Succ of term
+
+  | TagType of tag_set
+  | Tag of tag
 
   | Empty
 
@@ -76,6 +91,7 @@ and elims_data =
   | ElimNat  of elims * term binder * term * term binder binder
   | ElimQ    of elims * term binder * term binder * term binder binder binder
   | ElimEmp  of elims * term
+  | ElimTag  of elims * term binder * term tag_map
 
 let mk_elim elims_data =
   { elims_data; elims_loc = Location.generated }
@@ -132,6 +148,10 @@ module AlphaEquality = struct
        true
     | Succ t1, Succ t2 ->
        equal_term t1 t2
+    | TagType tags1, TagType tags2 ->
+       TagSet.equal tags1 tags2
+    | Tag tag1, Tag tag2 ->
+       Tag.equal tag1 tag2
     | TyEq (s1, t1), TyEq (s2, t2) ->
        equal_term s1 s2 && equal_term t1 t2
     | TmEq { tm1;      ty1;      tm2;      ty2 },
@@ -199,6 +219,11 @@ module AlphaEquality = struct
     | ElimEmp (es, ty), ElimEmp (es', ty') ->
        equal_elims es es' &&
        equal_term ty ty'
+    | ElimTag (es, ty, clauses),
+      ElimTag (es', ty', clauses') ->
+       equal_elims es es' &&
+       binder equal_term ty ty' &&
+       TagMap.equal equal_term clauses clauses'
     | Project (es, dir), Project (es', dir') ->
        dir = dir' && equal_elims es es'
     | _, _ ->
@@ -287,7 +312,7 @@ end = struct
                                 ; tm2 = traverse_term j tm2
                                 ; ty2 = traverse_term j ty2
                                 } }
-        | {term_data = Bool | True | False | Nat | Zero | Refl | Set | Empty} ->
+        | {term_data = Bool | True | False | Nat | Zero | Refl | Set | Empty | TagType _ | Tag _} ->
            tm
         | {term_data = Succ t} ->
            { tm with term_data = Succ (traverse_term j t) }
@@ -356,6 +381,10 @@ end = struct
         | { elims_data = ElimEmp (elims, ty) } ->
            { es with elims_data = ElimEmp (traverse_elims j elims,
                                            traverse_term j ty) }
+        | { elims_data = ElimTag (elims, ty, clauses) } ->
+           { es with elims_data = ElimTag (traverse_elims j elims,
+                                           binder traverse_term j ty,
+                                           TagMap.map (traverse_term j) clauses) }
     in
     traverse_term j tm
 

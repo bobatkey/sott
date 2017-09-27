@@ -1,0 +1,18 @@
+define Bool2 : Set
+as {| `True, `False |}
+
+define true : Bool2
+as `True
+
+define false : Bool2
+as `False
+
+define not : Bool2 -> Bool2
+as introduce b,
+   use b for _. Bool2 {
+     `True -> `False;
+     `False -> `True;
+   }
+
+define test : [ not `True = `False : Bool2 ]
+as refl

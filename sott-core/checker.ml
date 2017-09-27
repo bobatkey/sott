@@ -20,6 +20,8 @@ type value =
   | V_Sigma   of value * value v_binder
   | V_Pair    of value * value
   | V_Empty
+  | V_TagType of tag_set
+  | V_Tag     of tag
   | V_TyEq    of value * value
   | V_TmEq    of { s : value; s_ty : value; t : value; t_ty : value }
   | V_Irrel
@@ -35,6 +37,7 @@ and v_elims =
   | E_ElimNat of v_elims * value v_binder * value * value v_binder v_binder
   | E_ElimQ   of v_elims * value v_binder * value v_binder
   | E_ElimEmp of v_elims * value
+  | E_ElimTag of v_elims * value v_binder * value tag_map
 
 and v_head =
   | H_Var of { shift : shift; typ : value }
@@ -100,6 +103,13 @@ let elimemp ty = function
   | _ ->
      failwith "internal error: type error in Empty type elimination"
 
+let elimtag ty clauses = function
+  | V_Tag tag -> TagMap.find tag clauses
+  | V_Neutral (h, es) ->
+     V_Neutral (h, E_ElimTag (es, ty, clauses))
+  | _ ->
+     failwith "internal error: type error in Tag elimination"
+
 let rec eval_elims t = function
   | E_Nil -> t
   | E_App (es, v) ->
@@ -116,6 +126,8 @@ let rec eval_elims t = function
      elimq ty v (eval_elims t es)
   | E_ElimEmp (es, ty) ->
      elimemp ty (eval_elims t es)
+  | E_ElimTag (es, ty, clauses) ->
+     elimtag ty clauses (eval_elims t es)
 
 let rec expand_value = function
   | V_Neutral (H_Free_global { defn = Some defn }, es) ->
@@ -136,6 +148,8 @@ let rec coerce v src tgt = match v, expand_value src, expand_value tgt with
   | v, V_Bool, V_Bool -> v
   | v, V_Set,  V_Set  -> v
   | n, V_Nat, V_Nat -> n
+  | t, V_TagType tags1, V_TagType tags2 when TagSet.equal tags1 tags2 ->
+     t
   | e, V_Empty, V_Empty -> e
   | f, V_Pi (ty_s, VB (_, ty_t)), V_Pi (ty_s', VB (x, ty_t')) ->
      let x = match f with V_Lam (VB (x, _)) -> x | _ -> x in
@@ -182,6 +196,8 @@ let reifiers ~eta_expand =
        mk_term Empty
     | V_QuotType (ty, r) ->
        mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set) r i))
+    | V_TagType tags ->
+       mk_term (TagType tags)
     | V_TyEq (s, t) ->
        mk_term (TyEq (reify_type s i, reify_type t i))
     | V_TmEq {s; s_ty; t; t_ty} ->
@@ -217,6 +233,8 @@ let reifiers ~eta_expand =
        mk_term Zero
     | V_Nat, V_Succ n ->
        mk_term (Succ (reify V_Nat n i))
+    | V_TagType _, V_Tag tag ->
+       mk_term (Tag tag)
     | V_Set, v ->
        reify_type v i
     | V_QuotType (t, _), V_QuotIntro v ->
@@ -324,6 +342,15 @@ let reifiers ~eta_expand =
             ty
          | _ ->
             failwith "internal error: type error reifying empty elim")
+    | E_ElimTag (es, VB (x, elim_ty), clauses) ->
+       (match reify_elims h ty es i with
+         | es', (V_TagType _ as ty') ->
+            mk_elim (ElimTag (es',
+                              B (x, reify_type (elim_ty (var ty' i)) (i+1)),
+                              TagMap.mapi (fun tag v -> reify (elim_ty (V_Tag tag)) v i) clauses)),
+            elim_ty (V_Neutral (h, es))
+         | _ ->
+            failwith "internal error: type error reifying tag elim")
   in
   reify_type, reify
 
@@ -474,6 +501,8 @@ end = struct
       | Zero  -> V_Zero
       | Succ t -> V_Succ (eval t env)
       | Empty -> V_Empty
+      | TagType tags -> V_TagType tags
+      | Tag tag      -> V_Tag tag
       | QuotType (ty, r) ->
          V_QuotType (eval ty env, eval r env)
       | QuotIntro tm ->
@@ -526,6 +555,11 @@ end = struct
       | ElimEmp (elims, ty) ->
          elimemp
            (eval ty env)
+           (eval_elims scrutinee elims env)
+      | ElimTag (elims, ty, clauses) ->
+         elimtag
+           (binder eval ty env)
+           (TagMap.map (fun tm -> eval tm env) clauses)
            (eval_elims scrutinee elims env)
     in
     eval tm
@@ -588,6 +622,9 @@ let rec is_type ctxt = function
      has_type ctxt (ty @-> ty @-> V_Set) r
 
   | { term_data = Empty } ->
+     Ok ()
+
+  | { term_data = TagType tags } ->
      Ok ()
 
   | { term_data = TyEq (s, t) } ->
@@ -671,6 +708,9 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      has_type ctxt ty1 tm1 >>= fun () ->
      has_type ctxt ty2 tm2
 
+  | V_Set, { term_data = TagType tags } ->
+     Ok ()
+
   | V_Set, { term_loc } ->
      Error (MsgLoc (term_loc, "This term is expected to be a code for a type, but isn't"))
 
@@ -692,6 +732,15 @@ and has_type ctxt ty tm = match expand_value ty, tm with
   | V_QuotType (ty, _), { term_loc } ->
      Error (MsgLoc (term_loc,
                     "This term is expected to be a member of a quotient type, but isn't"))
+
+  | V_TagType tags, { term_data = Tag tag; term_loc } ->
+     if TagSet.mem tag tags then
+       Ok ()
+     else
+       Error (MsgLoc (term_loc,
+                      Printf.sprintf "The tag %s is not an element of the tag set" tag))
+  | V_TagType tags, { term_loc } ->
+     Error (MsgLoc (term_loc, "This term is expected to be a tag, but isn't"))
 
   | V_Empty, { term_loc } ->
      Error (MsgLoc (term_loc,
@@ -796,6 +845,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
 
   | ( V_True | V_False | V_Zero | V_Succ _
     | V_Lam _ | V_Pair _ | V_QuotIntro _
+    | V_Tag _
     | V_Irrel | V_Neutral _), _ ->
      failwith "internal error: has_type: attempting to check canonical term aganst non canonical type"
 
@@ -946,3 +996,35 @@ and synthesise_elims_type ctxt h = function
            Ok (Evaluation.eval0 ctxt elim_ty)
         | _ ->
            Error (MsgLoc (elims_loc, "attempt to do empty type elimination on expression of non Empty type")))
+
+  | { elims_data = ElimTag (elims, elim_ty, clauses); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+        | V_TagType tags ->
+           let unmatched_tags = TagMap.fold (fun k _ -> TagSet.remove k) clauses tags in
+           if TagSet.is_empty unmatched_tags then
+             let unmatchable_tags =
+               TagMap.fold
+                 (fun k _ s -> if TagSet.mem k tags then s else TagSet.add k s)
+                 clauses
+                 TagSet.empty
+             in
+             if TagSet.is_empty unmatchable_tags then
+               (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
+                is_type ctxt elim_ty)
+               >>= fun () ->
+               let ty = Evaluation.eval1 ctxt elim_ty in
+               TagMap.fold
+                 (fun tag tm result ->
+                    result >>= fun () ->
+                    has_type ctxt (ty (V_Tag tag)) tm)
+                 clauses
+                 (Ok ())
+               >>= fun () ->
+               Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
+             else
+               Error (MsgLoc (elims_loc, "extra tag cases"))
+           else
+             Error (MsgLoc (elims_loc, "missing tag cases"))
+        | _ ->
+           Error (MsgLoc (elims_loc, "attempt to do tag elimination on expression of non tag type")))

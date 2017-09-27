@@ -5,14 +5,14 @@ open Parser
 let class_of_token = function
   | SET | BOOL | TRUE | FALSE | NAT | ZERO | SUCC
   | REFL | COH | SUBST | FUNEXT | SAME_CLASS
-  | SLASH | INTRODUCE | EMPTY ->
+  | SLASH | INTRODUCE | EMPTY | TAG _ ->
      "constructor"
   | HASH_FST | HASH_SND | COERCE | FOR | USE ->
      "eliminator"
   | DEFINE | AS ->
      "definitions"
   | LPAREN | RPAREN | LBRACE | RBRACE | LSQBRACK | RSQBRACK
-  | EQUALS | COLON | SEMICOLON | DOT | COMMA
+  | EQUALS | COLON | SEMICOLON | DOT | COMMA | LBRACEPIPE | PIPERBRACE
   | ARROW | ASTERISK | BACKSLASH | UNDERSCORE | NATURAL _ ->
      "punctuation"
   | IDENT _ ->

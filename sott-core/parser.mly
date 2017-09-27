@@ -8,6 +8,7 @@ type elim =
   | ElimNat  of term binder * term * term binder binder * Location.t
   | ElimQ    of term binder * term binder * term binder binder binder * Location.t
   | ElimEmp  of term * Location.t
+  | ElimTag  of term binder * term tag_map * Location.t
 
 let nil =
   { elims_data = Nil; elims_loc = Location.generated }
@@ -25,11 +26,13 @@ let build_elim elims = function
      { elims_data = ElimQ (elims, ty, tm, tm_eq); elims_loc }
   | ElimEmp (ty, elims_loc) ->
      { elims_data = ElimEmp (elims, ty); elims_loc }
+  | ElimTag (ty, clauses, elims_loc) ->
+     { elims_data = ElimTag (elims, ty, clauses); elims_loc }
 %}
 
-%token <string> IDENT
+%token <string> IDENT TAG
 %token <int> NATURAL
-%token LPAREN LBRACE LSQBRACK
+%token LPAREN LBRACE LSQBRACK LBRACEPIPE PIPERBRACE
 %token RPAREN RBRACE RSQBRACK
 %token DOT COMMA COLON SEMICOLON EQUALS SLASH
 %token ARROW ASTERISK UNDERSCORE
@@ -171,6 +174,12 @@ base_term:
   | EMPTY
     { { term_data = Empty
       ; term_loc  = Location.mk $startpos $endpos } }
+  | LBRACEPIPE; tags=separated_list(COMMA,TAG); PIPERBRACE
+    { { term_data = TagType (TagSet.of_list tags)
+      ; term_loc  = Location.mk $startpos $endpos } }
+  | tag=TAG
+    { { term_data = Tag tag
+      ; term_loc  = Location.mk $startpos $endpos } }
   | LSQBRACK; ty1=term; EQUALS; ty2=term; RSQBRACK
     { { term_data = TyEq (ty1, ty2)
       ; term_loc  = Location.mk $startpos $endpos } }
@@ -238,3 +247,11 @@ elim:
       { ElimQ (Scoping.bind x ty, Scoping.bind a tm, Scoping.bind3 x1 x2 xr tm_eq, Location.mk $startpos $endpos) }
   | FOR; ty=term; LBRACE; RBRACE
       { ElimEmp (ty, Location.mk $startpos $endpos) }
+  | FOR; x=binder; DOT; ty=term;
+       LBRACE;
+       clauses=list(tag=TAG; ARROW; tm=term; SEMICOLON { (tag, tm) });
+       RBRACE
+      { ElimTag (Scoping.bind x ty,
+                 List.fold_right (fun (tag,tm) -> TagMap.add tag tm) clauses TagMap.empty,
+                 Location.mk $startpos $endpos) }
+
