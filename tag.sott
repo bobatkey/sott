@@ -11,7 +11,7 @@ define not : Bool2 -> Bool2
 as introduce b,
    use b for _. Bool2 {
      `True -> `False;
-     `False -> `True;
+     `False -> `True
    }
 
 define test : [ not `True = `False : Bool2 ]

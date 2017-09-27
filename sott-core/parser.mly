@@ -247,11 +247,23 @@ elim:
       { ElimQ (Scoping.bind x ty, Scoping.bind a tm, Scoping.bind3 x1 x2 xr tm_eq, Location.mk $startpos $endpos) }
   | FOR; ty=term; LBRACE; RBRACE
       { ElimEmp (ty, Location.mk $startpos $endpos) }
-  | FOR; x=binder; DOT; ty=term;
-       LBRACE;
-       clauses=list(tag=TAG; ARROW; tm=term; SEMICOLON { (tag, tm) });
-       RBRACE
+  | FOR; x=binder; DOT; ty=term; LBRACE; clauses=maybe_clauses; RBRACE
       { ElimTag (Scoping.bind x ty,
-                 List.fold_right (fun (tag,tm) -> TagMap.add tag tm) clauses TagMap.empty,
+                 TagMap.of_bindings clauses,
                  Location.mk $startpos $endpos) }
 
+maybe_clauses:
+  | (* empty *)
+      { [] }
+  | cs=clauses
+      { cs }
+
+clauses:
+  | c=clause; SEMICOLON?
+      { [c] }
+  | c=clause; SEMICOLON; cs=clauses
+      { c :: cs }
+
+clause:
+  | tag=TAG; ARROW; tm=term
+      { (tag, tm) }

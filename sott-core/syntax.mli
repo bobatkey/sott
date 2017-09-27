@@ -10,9 +10,13 @@ module TagSet : Set.S
   with type t = tag_set
    and type elt = tag
 
-module TagMap : Map.S
-  with type 'a t = 'a tag_map
-   and type key = tag
+module TagMap : sig
+  include Map.S
+    with type 'a t = 'a tag_map
+     and type key = tag
+
+  val of_bindings : (tag * 'a) list -> 'a t
+end
 
 type 'a binder =
   | B  of string * 'a

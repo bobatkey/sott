@@ -3,7 +3,11 @@ module Tag = struct
   let compare = String.compare
   let equal = String.equal
 end
-module TagMap = Map.Make (Tag)
+module TagMap = struct
+  include Map.Make (Tag)
+  let of_bindings bs =
+    List.fold_right (fun (tag,v) -> add tag v) bs empty
+end
 module TagSet = Set.Make (Tag)
 
 type tag = Tag.t

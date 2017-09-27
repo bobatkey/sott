@@ -184,7 +184,7 @@ and pp_base_term ctxt fmt tm =
          (pp_term ctxt) tm
     | TagType tags ->
        Format.fprintf fmt
-         "{%a}"
+         "{|@[%a@]|}"
          (pp_iter TagSet.iter ~sep:",@ " pp_tag) tags
     | Tag tag ->
        pp_tag fmt tag
@@ -315,11 +315,11 @@ and pp_elims ctxt fmt (head, elims) =
          "@[<v 2>%a for %s. %a {@,%a@]@,}"
          (pp_elims ctxt) (head, elims)
          ty_nm (pp_term ty_ctxt) ty
-         (pp_bindings TagMap.iter ~sep:"" (pp_clause ctxt)) clauses
+         (pp_bindings TagMap.iter ~sep:"@," (pp_clause ctxt)) clauses
 
 and pp_clause ctxt fmt (tag, term) =
   Format.fprintf fmt
-    "@[<v 3>%s ->@ %a;@]"
+    "@[<v 3>`%s ->@ %a;@]"
     tag
     (pp_term ctxt) term
     
