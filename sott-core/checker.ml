@@ -8,9 +8,6 @@ type value =
   | V_Neutral of v_head * v_elims
   | V_Lam     of value v_binder
   | V_Set
-  | V_Bool
-  | V_True
-  | V_False
   | V_Nat
   | V_Zero
   | V_Succ    of value
@@ -19,7 +16,6 @@ type value =
   | V_Pi      of value * value v_binder
   | V_Sigma   of value * value v_binder
   | V_Pair    of value * value
-  | V_Empty
   | V_TagType of tag_set
   | V_Tag     of tag
   | V_TyEq    of value * value
@@ -32,11 +28,9 @@ and 'a v_binder =
 and v_elims =
   | E_Nil
   | E_App of v_elims * value
-  | E_If  of v_elims * value v_binder * value * value
   | E_Project of v_elims * [`fst|`snd]
   | E_ElimNat of v_elims * value v_binder * value * value v_binder v_binder
   | E_ElimQ   of v_elims * value v_binder * value v_binder
-  | E_ElimEmp of v_elims * value
   | E_ElimTag of v_elims * value v_binder * value tag_map
 
 and v_head =
@@ -71,14 +65,6 @@ let vsnd = function
   | _ ->
      failwith "internal error: type error in vsnd"
 
-let elimbool ty v_t v_f = function
-  | V_True            -> v_t
-  | V_False           -> v_f
-  | V_Neutral (h, es) ->
-     V_Neutral (h, E_If (es, ty, v_t, v_f))
-  | _ ->
-     failwith "internal error: type error in Bool elimination"
-
 let elimnat ty v_z v_s =
   let rec natrec = function
     | V_Zero   -> v_z
@@ -97,12 +83,6 @@ let elimq ty v = function
   | _ ->
      failwith "internal error: type error in quotient value elimination"
 
-let elimemp ty = function
-  | V_Neutral (h, es) ->
-     V_Neutral (h, E_ElimEmp (es, ty))
-  | _ ->
-     failwith "internal error: type error in Empty type elimination"
-
 let elimtag ty clauses = function
   | V_Tag tag -> TagMap.find tag clauses
   | V_Neutral (h, es) ->
@@ -114,8 +94,6 @@ let rec eval_elims t = function
   | E_Nil -> t
   | E_App (es, v) ->
      apply (eval_elims t es) v
-  | E_If (es, ty, v_t, v_f) ->
-     elimbool ty v_t v_f (eval_elims t es)
   | E_Project (es, `fst) ->
      vfst (eval_elims t es)
   | E_Project (es, `snd) ->
@@ -124,8 +102,6 @@ let rec eval_elims t = function
      elimnat ty v_z v_s (eval_elims t es)
   | E_ElimQ (es, ty, v) ->
      elimq ty v (eval_elims t es)
-  | E_ElimEmp (es, ty) ->
-     elimemp ty (eval_elims t es)
   | E_ElimTag (es, ty, clauses) ->
      elimtag ty clauses (eval_elims t es)
 
@@ -145,12 +121,10 @@ let free x ty =
 let (@->) s t = V_Pi (s, VB ("x", fun _ -> t))
 
 let rec coerce v src tgt = match v, expand_value src, expand_value tgt with
-  | v, V_Bool, V_Bool -> v
   | v, V_Set,  V_Set  -> v
   | n, V_Nat, V_Nat -> n
   | t, V_TagType tags1, V_TagType tags2 when TagSet.equal tags1 tags2 ->
      t
-  | e, V_Empty, V_Empty -> e
   | f, V_Pi (ty_s, VB (_, ty_t)), V_Pi (ty_s', VB (x, ty_t')) ->
      let x = match f with V_Lam (VB (x, _)) -> x | _ -> x in
      V_Lam
@@ -188,12 +162,8 @@ let reifiers ~eta_expand =
        mk_term (Sigma (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
     | V_Set ->
        mk_term Set
-    | V_Bool ->
-       mk_term Bool
     | V_Nat ->
        mk_term Nat
-    | V_Empty ->
-       mk_term Empty
     | V_QuotType (ty, r) ->
        mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set) r i))
     | V_TagType tags ->
@@ -225,10 +195,6 @@ let reifiers ~eta_expand =
     | V_TyEq _, v
     | V_TmEq _, v ->
        mk_term Irrel
-    | V_Bool, V_True ->
-       mk_term True
-    | V_Bool, V_False ->
-       mk_term False
     | V_Nat, V_Zero ->
        mk_term Zero
     | V_Nat, V_Succ n ->
@@ -290,16 +256,6 @@ let reifiers ~eta_expand =
             mk_elim (App (es, reify s v i)), t v
          | _ ->
             failwith "internal error: type error reifying application")
-    | E_If (es, VB (x, elim_ty), v_t, v_f) ->
-       (match reify_elims h ty es i with
-         | es', V_Bool ->
-            mk_elim (ElimBool (es',
-                               B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
-                               reify (elim_ty V_True) v_t i,
-                               reify (elim_ty V_False) v_f i)),
-            elim_ty (V_Neutral (h, es))
-         | _ ->
-            failwith "internal error: type error reifying bool case switch")
     | E_Project (es, component) ->
        (* Note: we don't need to check for the projections from type
           equalities cases here because they will have been erased
@@ -315,7 +271,7 @@ let reifiers ~eta_expand =
        (match reify_elims h ty es i with
          | es', V_Nat ->
             mk_elim (ElimNat (es',
-                              B (x, reify_type (elim_ty (var V_Bool i)) (i+1)),
+                              B (x, reify_type (elim_ty (var V_Nat i)) (i+1)),
                               reify (elim_ty V_Zero) v_z i,
                               let VB (n, v_s) = v_s in
                               let var_n = var V_Nat i in
@@ -335,13 +291,6 @@ let reifiers ~eta_expand =
             elim_ty (V_Neutral (h, es))
          | _ ->
             failwith "internal error: type error reifying quotient elim")
-    | E_ElimEmp (es, ty) ->
-       (match reify_elims h ty es i with
-         | es', V_Empty ->
-            mk_elim (ElimEmp (es', reify_type ty i)),
-            ty
-         | _ ->
-            failwith "internal error: type error reifying empty elim")
     | E_ElimTag (es, VB (x, elim_ty), clauses) ->
        (match reify_elims h ty es i with
          | es', (V_TagType _ as ty') ->
@@ -494,13 +443,9 @@ end = struct
                 ; t    = eval tm2 env
                 ; t_ty = eval ty2 env
                 }
-      | Bool  -> V_Bool
-      | True  -> V_True
-      | False -> V_False
       | Nat   -> V_Nat
       | Zero  -> V_Zero
       | Succ t -> V_Succ (eval t env)
-      | Empty -> V_Empty
       | TagType tags -> V_TagType tags
       | Tag tag      -> V_Tag tag
       | QuotType (ty, r) ->
@@ -531,12 +476,6 @@ end = struct
          scrutinee
       | App (elims, tm) ->
          apply (eval_elims scrutinee elims env) (eval tm env)
-      | ElimBool (elims, ty, tm_t, tm_f) ->
-         elimbool
-           (binder eval ty env)
-           (eval tm_t env)
-           (eval tm_f env)
-           (eval_elims scrutinee elims env)
       | Project (elims, `fst) ->
          vfst (eval_elims scrutinee elims env)
       | Project (elims, `snd) ->
@@ -551,10 +490,6 @@ end = struct
          elimq
            (binder eval ty env)
            (binder eval tm env)
-           (eval_elims scrutinee elims env)
-      | ElimEmp (elims, ty) ->
-         elimemp
-           (eval ty env)
            (eval_elims scrutinee elims env)
       | ElimTag (elims, ty, clauses) ->
          elimtag
@@ -600,9 +535,6 @@ let rec is_type ctxt = function
   | { term_data = Set } ->
      Ok ()
 
-  | { term_data = Bool } ->
-     Ok ()
-
   | { term_data = Nat } ->
      Ok ()
 
@@ -620,9 +552,6 @@ let rec is_type ctxt = function
      is_type ctxt ty >>= fun () ->
      let ty = Evaluation.eval0 ctxt ty in
      has_type ctxt (ty @-> ty @-> V_Set) r
-
-  | { term_data = Empty } ->
-     Ok ()
 
   | { term_data = TagType tags } ->
      Ok ()
@@ -678,7 +607,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
   | V_Sigma _, { term_loc } ->
      Error (MsgLoc (term_loc, "This term is expected to be a pair, but isn't"))
 
-  | V_Set, { term_data = Bool | Nat | Empty } ->
+  | V_Set, { term_data = Nat } ->
      Ok ()
 
   | V_Set, { term_data = Pi (s, t) } ->
@@ -714,12 +643,6 @@ and has_type ctxt ty tm = match expand_value ty, tm with
   | V_Set, { term_loc } ->
      Error (MsgLoc (term_loc, "This term is expected to be a code for a type, but isn't"))
 
-  | V_Bool, { term_data = True | False } ->
-     Ok ()
-
-  | V_Bool, { term_loc } ->
-     Error (MsgLoc (term_loc, "This term is expected to be a boolean, but isn't"))
-
   | V_Nat, { term_data = Zero } ->
      Ok ()
   | V_Nat, { term_data = Succ n } ->
@@ -741,10 +664,6 @@ and has_type ctxt ty tm = match expand_value ty, tm with
                       Printf.sprintf "The tag %s is not an element of the tag set" tag))
   | V_TagType tags, { term_loc } ->
      Error (MsgLoc (term_loc, "This term is expected to be a tag, but isn't"))
-
-  | V_Empty, { term_loc } ->
-     Error (MsgLoc (term_loc,
-                    "This term is expected to be an inhabitant of the empty type, but (invevitably) isn't."))
 
   | V_TyEq (ty1, ty2), { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e } } ->
      is_type ctxt ty_s >>= fun () ->
@@ -843,7 +762,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      Error (MsgLoc (term_loc,
                     "This term is expected to be a proof of a term equality, but isn't"))
 
-  | ( V_True | V_False | V_Zero | V_Succ _
+  | ( V_Zero | V_Succ _
     | V_Lam _ | V_Pair _ | V_QuotIntro _
     | V_Tag _
     | V_Irrel | V_Neutral _), _ ->
@@ -891,21 +810,6 @@ and synthesise_elims_type ctxt h = function
            let arg_loc = Syntax.location_of_term tm in
            let ty      = reify_type ty 0 in
            Error (BadApplication {loc;arg_loc;ctxt;ty}))
-
-  | { elims_data = ElimBool (elims, elim_ty, tm_t, tm_f); elims_loc } ->
-     (synthesise_elims_type ctxt h elims >>= fun ty ->
-      match expand_value ty with
-        | V_Bool ->
-           (let _, elim_ty, ctxt = ScopeClose.close V_Bool elim_ty ctxt in
-            is_type ctxt elim_ty)
-           >>= fun () ->
-           let ty = Evaluation.eval1 ctxt elim_ty in
-           has_type ctxt (ty V_True) tm_t >>= fun () ->
-           has_type ctxt (ty V_False) tm_f >>= fun () ->
-           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
-        | _ ->
-           (* FIXME: custom error message for this kind of bad elimination *)
-           Error (MsgLoc (elims_loc, "attempt to eliminate non boolean")))
 
   | { elims_data = ElimNat (elims, elim_ty, tm_z, tm_s); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -987,15 +891,6 @@ and synthesise_elims_type ctxt h = function
            let hd_loc = location_of_neutral h elims in
            let loc    = elims_loc in
            Error (BadProject {loc;hd_loc;ctxt;ty}))
-
-  | { elims_data = ElimEmp (elims, elim_ty); elims_loc } ->
-     (synthesise_elims_type ctxt h elims >>= fun ty ->
-      match expand_value ty with
-        | V_Empty ->
-           is_type ctxt elim_ty >>= fun () ->
-           Ok (Evaluation.eval0 ctxt elim_ty)
-        | _ ->
-           Error (MsgLoc (elims_loc, "attempt to do empty type elimination on expression of non Empty type")))
 
   | { elims_data = ElimTag (elims, elim_ty, clauses); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->

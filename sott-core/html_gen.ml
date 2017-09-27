@@ -3,9 +3,9 @@ open Html5.Static
 open Parser
 
 let class_of_token = function
-  | SET | BOOL | TRUE | FALSE | NAT | ZERO | SUCC
+  | SET | NAT | ZERO | SUCC
   | REFL | COH | SUBST | FUNEXT | SAME_CLASS
-  | SLASH | INTRODUCE | EMPTY | TAG _ ->
+  | SLASH | INTRODUCE | TAG _ ->
      "constructor"
   | HASH_FST | HASH_SND | COERCE | FOR | USE ->
      "eliminator"

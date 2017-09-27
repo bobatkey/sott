@@ -1,10 +1,12 @@
+define Bool : Set as {| `True, `False |}
+
 define sum :
   Set -> Set -> Set
-as \A B -> (x : Bool) * (x for x. Set { True -> A; False -> B })
+as \A B -> (x : Bool) * (x for x. Set { `True -> A; `False -> B })
 
 define inl :
   (A:Set)(B:Set) -> A -> sum A B
-as \A B a -> (True, a)
+as \A B a -> (`True, a)
 
 define symm :
   (A : Set)(x : A)(y : A)(p : [x : A = y : A]) -> [y : A = x : A]
@@ -18,7 +20,7 @@ as
 
 define and :
   Bool -> Bool -> Bool
-as \x y -> x for y. Bool { True -> y; False -> False }
+as \x y -> x for y. Bool { `True -> y; `False -> `False }
 
 (* An easier to use functional extensionality principle *)
 define funext2 :
@@ -32,27 +34,27 @@ as \S T f g e ->
                             subst(S,y.[f x1 : T x1 = g y : T y],x1,x2,xe)))
 
 define eq_funcs :
-  [ \b -> False : Bool -> Bool = \b -> and b False : Bool -> Bool]
+  [ \b -> `False : Bool -> Bool = \b -> and b `False : Bool -> Bool]
 as
-  funext2 Bool (\x -> Bool) (\b -> False) (\b -> and b False) 
-    (\b -> b for b. [False : Bool = and b False : Bool ]
-                { True -> refl; False -> refl })
+  funext2 Bool (\x -> Bool) (\b -> `False) (\b -> and b `False) 
+    (\b -> b for b. [`False : Bool = and b `False : Bool ]
+                { `True -> refl; `False -> refl })
 
 define F : (Bool -> Bool) -> Set
-as \f -> sum [f : Bool -> Bool = \x -> False : Bool -> Bool]
-             [f : Bool -> Bool = \x -> True : Bool -> Bool]
+as \f -> sum [f : Bool -> Bool = \x -> `False : Bool -> Bool]
+             [f : Bool -> Bool = \x -> `True : Bool -> Bool]
 
-define v : F (\x -> False)
-as (True, refl)
+define v : F (\x -> `False)
+as (`True, refl)
 
-define hofmann2 : F (\x -> and x False)
-as coerce(v, F (\x -> False), F (\x -> and x False),
-          subst(Bool -> Bool,x. F x, (\x -> False), (\x -> and x False), eq_funcs))
+define hofmann2 : F (\x -> and x `False)
+as coerce(v, F (\x -> `False), F (\x -> and x `False),
+          subst(Bool -> Bool,x. F x, (\x -> `False), (\x -> and x `False), eq_funcs))
 
 define test :
-  [hofmann2 : F (\x -> and x False) =
-   (True, symm (Bool -> Bool) (\x -> False) (\x -> and x False) eq_funcs)
-      : F (\x -> and x False)
+  [hofmann2 : F (\x -> and x `False) =
+   (`True, symm (Bool -> Bool) (\x -> `False) (\x -> and x `False) eq_funcs)
+      : F (\x -> and x `False)
       ]
 as
   refl

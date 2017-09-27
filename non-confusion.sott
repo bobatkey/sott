@@ -12,6 +12,7 @@ define oddity : [ \x -> Zero_ne_Succ Nat Zero x = \x -> 0
                 : [ 0 = 1 : Nat] -> Nat ]
 as refl
 
+define Empty : Set as {| |}
 
 define Zero_ne_Succ2 : (n:Nat) -> [ Zero = Succ n : Nat ] -> Empty
 as introduce n eq,

@@ -35,18 +35,12 @@ and term_data =
   | Sigma of term * term binder
   | Pair of term * term
 
-  | Bool
-  | True
-  | False
-
   | Nat
   | Zero
   | Succ of term
 
   | TagType of tag_set
   | Tag of tag
-
-  | Empty
 
   | TyEq of term * term
   | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
@@ -91,10 +85,8 @@ and elims_data =
   | Nil
   | App      of elims * term
   | Project  of elims * [`fst | `snd]
-  | ElimBool of elims * term binder * term * term
   | ElimNat  of elims * term binder * term * term binder binder
   | ElimQ    of elims * term binder * term binder * term binder binder binder
-  | ElimEmp  of elims * term
   | ElimTag  of elims * term binder * term tag_map
 
 let mk_elim elims_data =
@@ -143,12 +135,8 @@ module AlphaEquality = struct
     | QuotIntro t1, QuotIntro t2 ->
        equal_term t1 t2
 
-    | Bool, Bool
-    | True, True
-    | False, False
     | Nat, Nat
-    | Zero, Zero
-    | Empty, Empty ->
+    | Zero, Zero ->
        true
     | Succ t1, Succ t2 ->
        equal_term t1 t2
@@ -202,12 +190,6 @@ module AlphaEquality = struct
        true
     | App (es, t), App (es', t') ->
        equal_elims es es' && equal_term t t'
-    | ElimBool (es, ty, tm_t, tm_f),
-      ElimBool (es', ty', tm_t', tm_f') ->
-       equal_elims es es' &&
-       binder equal_term ty ty' &&
-       equal_term tm_t tm_t' &&
-       equal_term tm_f tm_f'
     | ElimNat (es,  ty,  tm_z,  tm_s),
       ElimNat (es', ty', tm_z', tm_s') ->
        equal_elims es es' &&
@@ -220,9 +202,6 @@ module AlphaEquality = struct
        binder equal_term ty ty' &&
        binder equal_term tm tm' &&
        binder (binder (binder equal_term)) tm_eq tm_eq'
-    | ElimEmp (es, ty), ElimEmp (es', ty') ->
-       equal_elims es es' &&
-       equal_term ty ty'
     | ElimTag (es, ty, clauses),
       ElimTag (es', ty', clauses') ->
        equal_elims es es' &&
@@ -316,7 +295,7 @@ end = struct
                                 ; tm2 = traverse_term j tm2
                                 ; ty2 = traverse_term j ty2
                                 } }
-        | {term_data = Bool | True | False | Nat | Zero | Refl | Set | Empty | TagType _ | Tag _} ->
+        | {term_data = Nat | Zero | Refl | Set | TagType _ | Tag _} ->
            tm
         | {term_data = Succ t} ->
            { tm with term_data = Succ (traverse_term j t) }
@@ -361,12 +340,6 @@ end = struct
         | { elims_data = App (elims, tm) } ->
            { es with
                elims_data = App (traverse_elims j elims, traverse_term j tm) }
-        | { elims_data = ElimBool (elims, ty, tm_t, tm_f) } as es ->
-           { es with
-               elims_data = ElimBool (traverse_elims j elims,
-                                      binder traverse_term j ty,
-                                      traverse_term j tm_t,
-                                      traverse_term j tm_f) }
         | { elims_data = Project (elims, component) } ->
            { es with
                elims_data = Project (traverse_elims j elims, component) }
@@ -381,10 +354,8 @@ end = struct
                elims_data = ElimQ (traverse_elims j elims,
                                    binder traverse_term j ty,
                                    binder traverse_term j tm,
-                                   binder (binder (binder traverse_term)) j tm_eq) }
-        | { elims_data = ElimEmp (elims, ty) } ->
-           { es with elims_data = ElimEmp (traverse_elims j elims,
-                                           traverse_term j ty) }
+                                   binder (binder (binder traverse_term)) j tm_eq)
+           }
         | { elims_data = ElimTag (elims, ty, clauses) } ->
            { es with elims_data = ElimTag (traverse_elims j elims,
                                            binder traverse_term j ty,

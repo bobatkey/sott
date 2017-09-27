@@ -1,21 +1,24 @@
+define Bool : Set
+as {| `True, `False |}
+
 define and : Bool -> Bool -> Bool
-as \x y -> x for y. Bool { True -> y; False -> False }
+as \x y -> x for y. Bool { `True -> y; `False -> `False }
 
 define eq_funcs :
-  [ \b -> and b False = \b -> False : Bool -> Bool ]
+  [ \b -> and b `False = \b -> `False : Bool -> Bool ]
 as funext(b1 b2 b_beq.
-          b1 for b. [and b False = False : Bool]
-             { True -> refl; False -> refl })
+          b1 for b. [and b `False = `False : Bool]
+             { `True -> refl; `False -> refl })
 
 define F : (Bool -> Bool) -> Set
 as \f -> Bool
 
 define hofmann : Bool
-as coerce(True, F (\b -> and b False), F (\b -> False),
+as coerce(`True, F (\b -> and b `False), F (\b -> `False),
           subst(Bool -> Bool, x. F x,
-                \b -> and b False,
-                \b -> False,
+                \b -> and b `False,
+                \b -> `False,
                 eq_funcs))
 
-define test : [hofmann = True : Bool]
+define test : [hofmann = `True : Bool]
 as refl

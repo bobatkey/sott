@@ -148,18 +148,10 @@ and pp_base_term ctxt fmt tm =
   match tm.term_data with
     | Set ->
        Format.fprintf fmt "Set"
-    | Bool ->
-       Format.fprintf fmt "Bool"
-    | True ->
-       Format.fprintf fmt "True"
-    | False ->
-       Format.fprintf fmt "False"
     | Nat ->
        Format.fprintf fmt "Nat"
     | Zero ->
        Format.fprintf fmt "0"
-    | Empty ->
-       Format.fprintf fmt "Empty"
     | TyEq (t1, t2) ->
        Format.fprintf fmt
          "@[[%a@ = %a]@]"
@@ -263,15 +255,6 @@ and pp_elims ctxt fmt (head, elims) =
          "@[<hv2>%a@ %a@]"
          (pp_elims ctxt)     (head, elims)
          (pp_base_term ctxt) tm
-    | ElimBool (elims, ty, tm_t, tm_f) ->
-       let nm, ty, ty_ctxt = Scope.close ty ctxt in
-       Format.fprintf fmt
-         "@[<v 2>%a for %s.@[%a@] {@,@[<v 3>True ->@ %a;@]@,@[<v 3>False ->@ %a;@]@]@,}"
-         (pp_elims ctxt)     (head, elims)
-         nm
-         (pp_term ty_ctxt)   ty
-         (pp_term ctxt)      tm_t
-         (pp_term ctxt)      tm_f
     | Project (elims, `fst) ->
        Format.fprintf fmt
          "%a #fst"
@@ -304,11 +287,6 @@ and pp_elims ctxt fmt (head, elims) =
          (pp_term tm_ctxt)  tm
          eq_nm1 eq_nm2 eq_nm3
          (pp_term eq_ctxt)  eq
-    | ElimEmp (elims, ty) ->
-       Format.fprintf fmt
-         "@[<v 2>%a for %a. { }@]"
-         (pp_elims ctxt) (head, elims)
-         (pp_term ctxt)  ty
     | ElimTag (elims, ty, clauses) ->
        let ty_nm, ty, ty_ctxt = Scope.close ty ctxt in
        Format.fprintf fmt

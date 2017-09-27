@@ -30,13 +30,9 @@ rule token = parse
 | "*"          { `Token ASTERISK }
 | '_'          { `Token UNDERSCORE }
 | "\\"         { `Token BACKSLASH }
-| "Bool"       { `Token BOOL }
-| "True"       { `Token TRUE }
-| "False"      { `Token FALSE }
 | "Nat"        { `Token NAT }
 | "Zero"       { `Token ZERO }
 | "Succ"       { `Token SUCC }
-| "Empty"      { `Token EMPTY }
 | "same-class" { `Token SAME_CLASS }
 | "/"          { `Token SLASH }
 | "for"        { `Token FOR }

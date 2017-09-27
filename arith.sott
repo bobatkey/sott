@@ -326,13 +326,14 @@ as introduce z1 z2 z3,
                        [z1], [z1'], same-class(z1r)))
    }
 
+define Bool : Set as {| `True, `False |}
 
 define F : Int -> Set
-as \z -> (b : Bool) * b for x.Set { True  -> [z = zero : Int];
-                                    False -> [z = one : Int ]  }
+as \z -> (b : Bool) * b for x.Set { `True  -> [z = zero : Int];
+                                    `False -> [z = one : Int ]  }
 
 define v : F zero
-as (True, refl)
+as (`True, refl)
 
 define hofmann2 : F (add_int one (negate one))
 as coerce(v, F zero, F (add_int one (negate one)),
@@ -340,5 +341,5 @@ as coerce(v, F zero, F (add_int one (negate one)),
                 symm Int (add_int one (negate one)) zero (inverses one)))
 
 define test_canonicity :
-  [ hofmann2 = (True, same-class(refl)) : F (add_int one (negate one)) ]
+  [ hofmann2 = (`True, same-class(refl)) : F (add_int one (negate one)) ]
 as refl

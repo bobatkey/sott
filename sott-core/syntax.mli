@@ -40,18 +40,12 @@ and term_data =
   | Sigma of term * term binder
   | Pair of term * term
 
-  | Bool
-  | True
-  | False
-
   | Nat
   | Zero
   | Succ of term
 
   | TagType of tag_set
   | Tag of tag
-
-  | Empty
 
   | TyEq of term * term
   | TmEq of { tm1 : term; ty1 : term; tm2 : term; ty2 : term }
@@ -96,10 +90,8 @@ and elims_data =
   | Nil
   | App      of elims * term
   | Project  of elims * [`fst | `snd]
-  | ElimBool of elims * term binder * term * term
   | ElimNat  of elims * term binder * term * term binder binder
   | ElimQ    of elims * term binder * term binder * term binder binder binder
-  | ElimEmp  of elims * term
   | ElimTag  of elims * term binder * term tag_map
 
 (**{2 Terms with generated locations}
