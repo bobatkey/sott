@@ -508,24 +508,96 @@ end
 
 (******************************************************************************)
 type error_message =
-  | Type_mismatch of { loc : Location.t; ctxt : Context.t; computed_ty : term; expected_ty : term }
-  | Types_not_equal of { loc : Location.t; ctxt : Context.t; ty1 : term; ty2 : term }
   | Term_is_not_a_type of Location.t
-  | Term_mismatch of Location.t * Context.t * term * term * term
+  | Type_mismatch of
+      { loc         : Location.t
+      ; ctxt        : Context.t
+      ; computed_ty : term
+      ; expected_ty : term }
+  | Term_is_not_a_function of Location.t
+  | Term_is_not_a_pair of Location.t
+  | Term_is_not_a_small_type of Location.t
+  | Term_is_not_a_natural of Location.t
+  | Term_is_not_an_equiv_class of Location.t
+  | Term_is_not_a_valid_tag of Location.t * tag_set
+  | Term_is_not_a_type_equality of Location.t
+  | Term_is_not_a_term_equality of Location.t
+  | Types_not_equal of
+      { loc  : Location.t
+      ; ctxt : Context.t
+      ; ty1  : term
+      ; ty2  : term }
+  | Terms_not_equal of
+      { loc  : Location.t
+      ; ctxt : Context.t
+      ; tm1  : Syntax.term
+      ; tm2  : Syntax.term
+      ; ty   : Syntax.term
+      }
+  | BadSubst of
+      { loc  : Location.t
+      ; ctxt : Context.t
+      ; desired_eq : Syntax.term * Syntax.term
+      ; proved_eq  : Syntax.term * Syntax.term
+      }
+  | BadFunext of
+      { loc  : Location.t
+      ; ctxt : Context.t
+      ; ty   : Syntax.term
+      }
+  | BadCoherence of
+      { loc  : Location.t
+      ; ctxt : Context.t
+      ; ty   : Syntax.term
+      }
+  | BadSameClass of
+      { loc  : Location.t
+      ; ctxt : Context.t
+      ; ty   : Syntax.term
+      }
   | VarNotFound of Location.t * string
   | BadApplication of
       { loc     : Location.t
       ; arg_loc : Location.t
       ; ctxt    : Context.t
-      ; ty      : term }
+      ; ty      : term
+      }
   | BadProject of
       { loc : Location.t
       ; hd_loc : Location.t
       ; ctxt   : Context.t
-      ; ty     : term }
-  | MsgLoc of Location.t * string
+      ; ty     : term
+      }
+  | BadNatElim of
+      { loc    : Location.t
+      ; hd_loc : Location.t
+      ; ctxt   : Context.t
+      ; ty     : term
+      }
+  | BadQuotElim of
+      { loc    : Location.t
+      ; hd_loc : Location.t
+      ; ctxt   : Context.t
+      ; ty     : term
+      }
+  | BadTagElim of
+      { loc    : Location.t
+      ; hd_loc : Location.t
+      ; ctxt   : Context.t
+      ; ty     : term
+      }
+  | IncorrectTags of
+      { loc         : Location.t
+      ; hd_loc      : Location.t
+      ; unmatched   : tag_set
+      ; unmatchable : tag_set
+      }
 
 module ScopeClose = Scoping.Close (Context)
+
+let reword_error rewriter = function
+  | Ok a      -> Ok a
+  | Error err -> Error (rewriter err)
 
 let (>>=) result f = match result with
   | Ok x         -> f x
@@ -597,7 +669,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      has_type ctxt (t x) tm
 
   | V_Pi _, { term_loc } ->
-     Error (MsgLoc (term_loc, "This term is expected to be a function, but isn't"))
+     Error (Term_is_not_a_function term_loc)
 
   | V_Sigma (s, VB (_, t)), { term_data = Pair (tm_s, tm_t) } ->
      has_type ctxt s tm_s >>= fun () ->
@@ -605,7 +677,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      has_type ctxt (t tm_s) tm_t
 
   | V_Sigma _, { term_loc } ->
-     Error (MsgLoc (term_loc, "This term is expected to be a pair, but isn't"))
+     Error (Term_is_not_a_pair term_loc)
 
   | V_Set, { term_data = Nat } ->
      Ok ()
@@ -641,29 +713,28 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      Ok ()
 
   | V_Set, { term_loc } ->
-     Error (MsgLoc (term_loc, "This term is expected to be a code for a type, but isn't"))
+     Error (Term_is_not_a_small_type term_loc)
 
   | V_Nat, { term_data = Zero } ->
      Ok ()
   | V_Nat, { term_data = Succ n } ->
      has_type ctxt V_Nat n
   | V_Nat, { term_loc } ->
-     Error (MsgLoc (term_loc, "This term is expected to be a Nat, but isn't"))
+     Error (Term_is_not_a_natural term_loc)
 
   | V_QuotType (ty, _), { term_data = QuotIntro tm } ->
      has_type ctxt ty tm
   | V_QuotType (ty, _), { term_loc } ->
-     Error (MsgLoc (term_loc,
-                    "This term is expected to be a member of a quotient type, but isn't"))
+     Error (Term_is_not_an_equiv_class term_loc)
 
   | V_TagType tags, { term_data = Tag tag; term_loc } ->
      if TagSet.mem tag tags then
        Ok ()
      else
-       Error (MsgLoc (term_loc,
-                      Printf.sprintf "The tag %s is not an element of the tag set" tag))
+       Error (Term_is_not_a_valid_tag (term_loc, tags))
+
   | V_TagType tags, { term_loc } ->
-     Error (MsgLoc (term_loc, "This term is expected to be a tag, but isn't"))
+     Error (Term_is_not_a_valid_tag (term_loc, tags))
 
   | V_TyEq (ty1, ty2), { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e } } ->
      is_type ctxt ty_s >>= fun () ->
@@ -675,15 +746,19 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      has_type ctxt ty_s tm_y >>= fun () ->
      let tm_x = Evaluation.eval0 ctxt tm_x in
      let tm_y = Evaluation.eval0 ctxt tm_y in
-     let ty   =
-       V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s }
-     in
+     let ty   = V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s } in
      has_type ctxt ty tm_e >>= fun () ->
      if equal_types (ty_t tm_x) ty1 && equal_types (ty_t tm_y) ty2 then
        Ok ()
      else
-       (* FIXME: report the mismatched types here *)
-       Error (MsgLoc (tm.term_loc, "type mismatch in subst"))
+       let desd_ty1 = reify_type_small ty1 0 in
+       let desd_ty2 = reify_type_small ty2 0 in
+       let prvd_ty1 = reify_type_small (ty_t tm_x) 0 in
+       let prvd_ty2 = reify_type_small (ty_t tm_y) 0 in
+       Error (BadSubst { loc=tm.term_loc; ctxt
+                       ; desired_eq = (desd_ty1, desd_ty2)
+                       ; proved_eq  = (prvd_ty1, prvd_ty2)
+                       })
 
   | V_TyEq (ty1, ty2),
     { term_data = Refl; term_loc } ->
@@ -695,8 +770,7 @@ and has_type ctxt ty tm = match expand_value ty, tm with
        Error (Types_not_equal { loc = term_loc; ctxt; ty1; ty2 })
 
   | V_TyEq _, { term_loc } ->
-     Error (MsgLoc (term_loc,
-                    "This term is expected to be a proof of a type equality, but isn't"))
+     Error (Term_is_not_a_type_equality term_loc)
 
   | V_TmEq { s; s_ty; t; t_ty }, { term_data = Refl; term_loc } ->
      if equal_types s_ty t_ty then
@@ -706,13 +780,13 @@ and has_type ctxt ty tm = match expand_value ty, tm with
           let s = reify_small s_ty s 0 in
           let t = reify_small s_ty t 0 in
           let ty = reify_type_small s_ty 0 in
-          Error (Term_mismatch (term_loc, ctxt, s, t, ty)))
+          Error (Terms_not_equal { loc = term_loc; ctxt; tm1 = s; tm2 = t; ty}))
      else
        let s_ty = reify_type_small s_ty 0 in
        let t_ty = reify_type_small t_ty 0 in
        Error (Types_not_equal { loc = term_loc; ctxt; ty1 = s_ty; ty2 = t_ty})
 
-  | V_TmEq { s=tm_f1; s_ty; t=tm_f2; t_ty}, { term_data = Funext proof } ->
+  | V_TmEq { s=tm_f1; s_ty; t=tm_f2; t_ty} as ty, { term_data = Funext proof } ->
      (match expand_value s_ty, expand_value t_ty with
        | V_Pi (s1, VB (_, t1)), V_Pi (s2, VB (_, t2)) ->
           let x1, x2, _, proof, ctxt =
@@ -733,40 +807,50 @@ and has_type ctxt ty tm = match expand_value ty, tm with
           in
           has_type ctxt reqd_ty proof
        | _ ->
-          Error (MsgLoc (tm.term_loc, "Misapplied functional extensionality")))
+          let ty = reify_type_small ty 0 in
+          Error (BadFunext { loc = tm.term_loc; ctxt; ty }))
 
   | V_TmEq {s; s_ty; t; t_ty}, { term_data = Coh prf; term_loc } ->
      has_type ctxt (V_TyEq (s_ty, t_ty)) prf >>= fun () ->
      if equal_terms t (coerce s s_ty t_ty) t_ty then
        Ok ()
      else
-       Error (MsgLoc (term_loc, "invalid use of coherence"))
+       let ty = reify_type_small ty 0 in
+       Error (BadCoherence { loc = term_loc; ctxt; ty })
 
   | V_TmEq { s; s_ty; t; t_ty }, { term_data = SameClass prf; term_loc } ->
-     (match expand_value s, expand_value s_ty, expand_value t, expand_value t_ty with
+     let error_when_false flag =
+       if flag then Ok ()
+       else
+         let ty = reify_type_small ty 0 in
+         Error (BadSameClass { loc = term_loc; ctxt; ty })
+     in
+     (match expand_value s,
+            expand_value s_ty,
+            expand_value t,
+            expand_value t_ty
+      with
        | V_QuotIntro a1,
          V_QuotType (ty1, r1),
          V_QuotIntro a2,
          V_QuotType (ty2, r2) ->
-          (if equal_types ty1 ty2 then Ok ()
-           else Error (MsgLoc (term_loc, "underlying types not equal")))
+          error_when_false (equal_types ty1 ty2)
           >>= fun () ->
-          (if equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set) then Ok ()
-           else Error (MsgLoc (term_loc, "relations not equal")))
+          error_when_false (equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set))
           >>= fun () ->
           has_type ctxt (apply (apply r1 a1) a2) prf
        | _ ->
-          Error (MsgLoc (term_loc, "Misused 'same-class'")))
+          error_when_false false)
 
   | V_TmEq _, { term_loc } ->
-     Error (MsgLoc (term_loc,
-                    "This term is expected to be a proof of a term equality, but isn't"))
+     Error (Term_is_not_a_term_equality term_loc)
 
   | ( V_Zero | V_Succ _
     | V_Lam _ | V_Pair _ | V_QuotIntro _
     | V_Tag _
     | V_Irrel | V_Neutral _), _ ->
-     failwith "internal error: has_type: attempting to check canonical term aganst non canonical type"
+     failwith "internal error: has_type: attempting to check canonical term \
+               against non canonical type"
 
 and synthesise_head_type ctxt = function
   | { head_data = Bound _ } ->
@@ -830,7 +914,10 @@ and synthesise_elims_type ctxt h = function
             has_type ctxt (ty (V_Succ n)) tm_s) >>= fun () ->
            Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
         | _ ->
-           Error (MsgLoc (elims_loc, "attempt to eliminate non natural")))
+           let ty     = reify_type_small ty 0 in
+           let hd_loc = location_of_neutral h elims in
+           let loc    = elims_loc in
+           Error (BadNatElim { loc; hd_loc; ctxt; ty }))
 
   | { elims_data = ElimQ (elims, elim_ty, tm, tm_eq); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -857,7 +944,10 @@ and synthesise_elims_type ctxt h = function
            >>= fun () ->
            Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
         | _ ->
-           Error (MsgLoc (elims_loc, "attempt to eliminate non quotient value")))
+           let ty     = reify_type_small ty 0 in
+           let hd_loc = location_of_neutral h elims in
+           let loc    = elims_loc in
+           Error (BadQuotElim { loc; hd_loc; ctxt; ty }))
 
   | { elims_data = Project (elims, `fst); elims_loc } ->
      (synthesise_elims_type ctxt h elims >>= fun ty ->
@@ -871,7 +961,7 @@ and synthesise_elims_type ctxt h = function
         | ty ->
            let ty     = reify_type_small ty 0 in
            let hd_loc = location_of_neutral h elims in
-           let loc = elims_loc in
+           let loc    = elims_loc in
            Error (BadProject {loc;hd_loc;ctxt;ty}))
 
   | { elims_data = Project (elims, `snd); elims_loc } ->
@@ -896,30 +986,36 @@ and synthesise_elims_type ctxt h = function
      (synthesise_elims_type ctxt h elims >>= fun ty ->
       match expand_value ty with
         | V_TagType tags ->
-           let unmatched_tags = TagMap.fold (fun k _ -> TagSet.remove k) clauses tags in
-           if TagSet.is_empty unmatched_tags then
-             let unmatchable_tags =
-               TagMap.fold
-                 (fun k _ s -> if TagSet.mem k tags then s else TagSet.add k s)
-                 clauses
-                 TagSet.empty
-             in
-             if TagSet.is_empty unmatchable_tags then
-               (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
-                is_type ctxt elim_ty)
-               >>= fun () ->
-               let ty = Evaluation.eval1 ctxt elim_ty in
-               TagMap.fold
-                 (fun tag tm result ->
-                    result >>= fun () ->
-                    has_type ctxt (ty (V_Tag tag)) tm)
-                 clauses
-                 (Ok ())
-               >>= fun () ->
-               Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
-             else
-               Error (MsgLoc (elims_loc, "extra tag cases"))
+           let unmatched =
+             TagMap.fold
+               (fun k _ -> TagSet.remove k)
+               clauses
+               tags
+           and unmatchable =
+             TagMap.fold
+               (fun k _ s -> if TagSet.mem k tags then s else TagSet.add k s)
+               clauses
+               TagSet.empty
+           in
+           if TagSet.is_empty unmatched && TagSet.is_empty unmatchable then
+             (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
+              is_type ctxt elim_ty)
+             >>= fun () ->
+             let ty = Evaluation.eval1 ctxt elim_ty in
+             TagMap.fold
+               (fun tag tm result ->
+                  result >>= fun () ->
+                  has_type ctxt (ty (V_Tag tag)) tm)
+               clauses
+               (Ok ())
+             >>= fun () ->
+             Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
            else
-             Error (MsgLoc (elims_loc, "missing tag cases"))
+             let hd_loc = location_of_neutral h elims in
+             let loc    = elims_loc in
+             Error (IncorrectTags { loc; hd_loc; unmatched; unmatchable })
         | _ ->
-           Error (MsgLoc (elims_loc, "attempt to do tag elimination on expression of non tag type")))
+           let ty     = reify_type_small ty 0 in
+           let hd_loc = location_of_neutral h elims in
+           let loc    = elims_loc in
+           Error (BadTagElim { loc; hd_loc; ctxt; ty }))

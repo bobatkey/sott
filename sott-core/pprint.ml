@@ -306,3 +306,8 @@ let pp_term fmt tm =
   (* FIXME: this ought to only work in a context, so we know what
      names are available. *)
   pp_term NameContext.empty fmt tm
+
+let pp_eqn fmt (tm1, tm2) =
+  Format.fprintf fmt "%a = %a"
+    pp_term tm1
+    pp_term tm2

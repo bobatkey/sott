@@ -13,7 +13,7 @@ let pp_msg fmt = function
        (* FIXME: these are meaningless without the context in which they occur *)
        Pprint.pp_term  ty1
        Pprint.pp_term  ty2
-  | Checker.Term_mismatch (loc, ctxt, tm1, tm2, ty) ->
+  | Checker.Terms_not_equal {loc; ctxt; tm1; tm2; ty} ->
      Format.fprintf fmt
        "terms not equal at %a:@ @[<v 2>@,%a@,@]@ is not equal to@ @[<v 2>@,%a@,@]@ at type@ @[<v 2>@,%a@,@]"
        Location.pp_without_filename loc
@@ -23,8 +23,62 @@ let pp_msg fmt = function
        Pprint.pp_term  ty
   | Checker.Term_is_not_a_type loc ->
      Format.fprintf fmt
-       "term is not a type at %a"
+       "expecting a type at %a"
        Location.pp_without_filename loc
+  | Checker.Term_is_not_a_small_type loc ->
+     Format.fprintf fmt
+       "expecting a small type at %a"
+       Location.pp_without_filename loc
+  | Checker.Term_is_not_a_function loc ->
+     Format.fprintf fmt
+       "expecting a function at %a"
+       Location.pp_without_filename loc
+  | Checker.Term_is_not_a_pair loc ->
+     Format.fprintf fmt
+       "expecting a pair at %a"
+       Location.pp_without_filename loc
+  | Checker.Term_is_not_a_natural loc ->
+     Format.fprintf fmt
+       "expecting a natural number at %a"
+       Location.pp_without_filename loc
+  | Checker.Term_is_not_an_equiv_class loc ->
+     Format.fprintf fmt
+       "expecting an equivalence class at %a"
+       Location.pp_without_filename loc
+  | Checker.Term_is_not_a_valid_tag (loc, tags) ->
+     Format.fprintf fmt
+       "expecting a tag from the set {|@[%a@]|} at %a"
+       (Pprint.pp_iter Syntax.TagSet.iter ~sep:",@ " Pprint.pp_tag) tags
+       Location.pp_without_filename loc
+  | Checker.Term_is_not_a_type_equality loc ->
+     Format.fprintf fmt
+       "expecting a type equality proof constructor at %a"
+       Location.pp_without_filename loc
+  | Checker.Term_is_not_a_term_equality loc ->
+     Format.fprintf fmt
+       "expecting a term equality proof constructor at %a"
+       Location.pp_without_filename loc
+  | Checker.BadSubst { loc; ctxt; desired_eq; proved_eq } ->
+     Format.fprintf fmt
+       "at %a: use of 'subst' proves the equation@ @[<v 2>@,%a@,@]@ but the equation@ @[<v 2>@,%a@,@]@ was expected."
+       Location.pp_without_filename loc
+       Pprint.pp_eqn                proved_eq
+       Pprint.pp_eqn                desired_eq
+  | Checker.BadFunext { loc; ctxt; ty } ->
+     Format.fprintf fmt
+       "at %a: attempt to use 'funext' to prove the equation@ @[<v 2>@,%a@,@]@ which is not an equation between values of function type."
+       Location.pp_without_filename loc
+       Pprint.pp_term               ty
+  | Checker.BadCoherence { loc; ctxt; ty } ->
+     Format.fprintf fmt
+       "at %a: attempt to use 'coherence' to prove the equation@ @[<v 2>@,%a@,@]@ which is not of the right shape."
+       Location.pp_without_filename loc
+       Pprint.pp_term               ty
+  | Checker.BadSameClass { loc; ctxt; ty } ->
+     Format.fprintf fmt
+       "at %a: attempt to use 'same-class' to prove the equation@ @[<v 2>@,%a@,@]@ which is not of the right shape."
+       Location.pp_without_filename loc
+       Pprint.pp_term               ty
   | Checker.BadApplication { loc; arg_loc; ctxt; ty } ->
      Format.fprintf fmt
        "Application of a non function at %a: term has type@ @[<v 2>@,%a@,@]"
@@ -35,14 +89,29 @@ let pp_msg fmt = function
        "bad projection at %a: term has type@ @[<v 2>@,%a@,@]@ which does not support projection."
        Location.pp_without_filename loc
        Pprint.pp_term               ty
+  | Checker.BadNatElim { loc; hd_loc; ctxt; ty } ->
+     Format.fprintf fmt
+       "at %a: natural number elimination applied to expression of type @[<v 2>@,%a@,@]@ which is not Nat."
+       Location.pp_without_filename loc
+       Pprint.pp_term               ty
+  | Checker.BadQuotElim { loc; hd_loc; ctxt; ty } ->
+     Format.fprintf fmt
+       "at %a: quotient elimination applied to expression of type @[<v 2>@,%a@,@]@ which is not a quotient type."
+       Location.pp_without_filename loc
+       Pprint.pp_term               ty
+  | Checker.BadTagElim { loc; hd_loc; ctxt; ty } ->
+     Format.fprintf fmt
+       "bad tag elimination at %a: term has type@ @[<v 2>@,%a@,@]@ which is not a tag type."
+       Location.pp_without_filename loc
+       Pprint.pp_term               ty
+  | Checker.IncorrectTags { loc; hd_loc; unmatched; unmatchable } ->
+     Format.fprintf fmt
+       "bad tag elimination at %a: the tags being matched do not match the possible tags of the scruntinee (FIXME)."
+       Location.pp_without_filename loc
   | Checker.VarNotFound (loc, nm)  ->
      Format.fprintf fmt
        "Variable '%s' not in scope at %a"
        nm
-       Location.pp_without_filename loc
-  | Checker.MsgLoc (loc, msg) ->
-     Format.fprintf fmt "%s at %a"
-       msg
        Location.pp_without_filename loc
 
 let rec process_decls ctxt = function
