@@ -1,0 +1,87 @@
+define Chain : (n : Nat)(A : Set) -> A -> A -> Set
+as introduce n A,
+   use n for _. A -> A -> Set {
+     Zero ->
+       \a b -> [a = b : A];
+     Succ _ C ->
+       \a c -> (b : A) * ([a = b : A] * C b c)
+   }
+
+define chain : (n:Nat)(A:Set)(a:A)(b:A) -> Chain n A a b -> [a = b : A]
+as introduce n A,
+   use n for n. (a:A)(b:A) -> Chain n A a b -> [a = b : A] {
+     Zero ->
+       introduce a b e,
+       use e;
+     Succ _ rest ->
+       introduce a c link,
+       use coerce
+         (link#snd#fst,
+          [a = link#fst : A],
+          [a = c : A],
+          use subst
+            (A,x.[a = x : A],
+             link#fst,
+             c,
+             use rest (link#fst) c (link#snd#snd)))
+   }
+
+define test : [Zero = Zero : Nat]
+as chain 1 Nat Zero Zero
+     (Zero, refl, refl)
+
+define symm :
+  (A : Set)(x : A)(y : A) -> [x = y : A] -> [y = x : A]
+as introduce A x y p,
+   use coerce(refl,
+              [x : A = x : A],
+              [y : A = x : A],
+              use subst(A,z.[z : A = x : A],
+                        x,
+                        y,
+                        use p))
+
+define add : Nat -> Nat -> Nat
+as introduce m n, use m for _. Nat {
+     Zero     -> use n;
+     Succ m p -> use Succ p
+   }
+
+define succ_eq : (m:Nat)(n:Nat) -> [m = n : Nat] -> [Succ m = Succ n : Nat]
+as introduce m n m_eq_n,
+   coerce(refl,
+          [Succ m = Succ m : Nat],
+          [Succ m = Succ n : Nat],
+          subst(Nat, x. [Succ m = Succ x : Nat],
+                m, n, m_eq_n))
+
+define add_n_Zero :
+  (n : Nat) -> [add n Zero = n : Nat]
+as introduce n,
+   use n for n. [add n Zero = n : Nat] {
+     Zero ->
+       use refl;
+     Succ n p ->
+       use succ_eq (add n Zero) n p;
+   }
+
+define add_Succ :
+  (m:Nat)(n:Nat) -> [ Succ (add m n) = add m (Succ n) : Nat]
+as introduce m n,
+   use m for x. [Succ (add x n) = add x (Succ n) : Nat] {
+     Zero ->
+       use refl;
+     Succ m p ->
+       use succ_eq (Succ (add m n)) (add m (Succ n)) p;
+   }
+
+define add_comm :
+  (x:Nat)(y:Nat) -> [ add x y = add y x : Nat ]
+as introduce x y,
+   use x for z. [ add z y = add y z : Nat ] {
+     Zero ->
+       use symm Nat (add y Zero) y (add_n_Zero y);
+     Succ x p ->
+       use chain 1 Nat (add (Succ x) y) (add y (Succ x))
+         (Succ (add y x), succ_eq (add x y) (add y x) p, add_Succ y x);
+   }
