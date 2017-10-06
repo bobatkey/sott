@@ -12,13 +12,17 @@ explosion of the sizes of types.
 
 ## How to build it
 
-1. Install [OCaml and opam](https://ocaml.org).
+1. Install [OCaml and opam](https://ocaml.org). You will need OCaml
+   version 4.03.0 or newer, because I've used inline records in
+   algebraic datatypes.
+
 2. `opam install jbuilder cmdliner menhir`
-3. `jbuilder build sott-cmdline/sott.exe`
+
+3. `jbuilder build cmdline/sott.exe`
 
 ## How to typecheck a file
 
-`./_build/default/sott-cmdline/sott.exe typecheck <file.sott>`
+`./_build/default/cmdline/sott.exe typecheck <file.sott>`
 
 ## Examples
 
@@ -94,9 +98,10 @@ explosion of the sizes of types.
    matter of implementing them in the lexer/parser/typechecker.
 
 3. The normaliser is a bit too keen and unfolds all definitions
-   whether it needs to or not. This leads to massive terms during type
-   checking. Error messages are now reported without unfolded
-   definitions though, which makes them a bit easier to read.
+   whether it needs to for equality checking or not. This leads to
+   massive terms during type checking. Error messages are now reported
+   without unfolded definitions though, which makes them a bit easier
+   to read.
 
 4. Type error messages don't include the context, and may output names
    that shadow names in the context, leading to incorrect terms.
