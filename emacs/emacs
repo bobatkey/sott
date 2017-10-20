@@ -1,0 +1,6 @@
+;; this should be inserted in your .emacs
+;; be careful to replace PATH/TO/ with the path...
+
+;; sott
+(autoload 'sott-mode "PATH/TO/sott/emacs/sott.el" nil t)
+(add-to-list 'auto-mode-alist '("\\.sott\\'" . sott-mode))
