@@ -1,31 +1,31 @@
 ;; based on: http://ergoemacs.org/emacs/elisp_syntax_coloring.html
 
 ;; define several class of keywords
-(setq mykeywords  '("define" "as" "introduce" "use" "for"))
-(setq myequality  '("coerce" "refl" "subst"))
-(setq myoperators '("->" "=" "/"))
-(setq mytypes     '("Set" "Nat"))
+(setq sott-keywords  '("define" "as" "introduce" "use" "for"))
+(setq sott-equality  '("coerce" "refl" "subst"))
+(setq sott-operators '("->" "=" "/"))
+(setq sott-types     '("Set" "Nat"))
 
 ;; create the regex string for each class of keywords
-(setq mykeywords-regexp  (regexp-opt mykeywords  'words))
-(setq myequality-regexp  (regexp-opt myequality 'words))
-(setq myoperators-regexp (regexp-opt myoperators))
-(setq mytypes-regexp     (regexp-opt mytypes     'words))
+(setq sott-keywords-regexp  (regexp-opt sott-keywords  'words))
+(setq sott-equality-regexp  (regexp-opt sott-equality 'words))
+(setq sott-operators-regexp (regexp-opt sott-operators))
+(setq sott-types-regexp     (regexp-opt sott-types     'words))
 
 ;; clear memory
-(setq mykeywords  nil)
-(setq myequality  nil)
-(setq myoperators nil)
-(setq mytypes     nil)
+(setq sott-keywords  nil)
+(setq sott-equality  nil)
+(setq sott-operators nil)
+(setq sott-types     nil)
 
 ;; create the list for font-lock.
 ;; each class of keyword is given a particular face
-(setq myfont-lock-keywords
+(setq sott-font-lock-keywords
   `(
-    (,mytypes-regexp     . font-lock-type-face)
-    (,myequality-regexp  . font-lock-keyword-face)
-    (,myoperators-regexp . font-lock-builtin-face)
-    (,mykeywords-regexp  . font-lock-keyword-face)
+    (,sott-types-regexp     . font-lock-type-face)
+    (,sott-equality-regexp  . font-lock-keyword-face)
+    (,sott-operators-regexp . font-lock-builtin-face)
+    (,sott-keywords-regexp  . font-lock-keyword-face)
 ))
 
 ;; syntax table
@@ -46,11 +46,11 @@
   ;; handling comments
   :syntax-table sott-syntax-table
   ;; code for syntax highlighting
-  (setq font-lock-defaults '((myfont-lock-keywords)))
+  (setq font-lock-defaults '((sott-font-lock-keywords)))
   (setq mode-name "sott")
   ;; clear memory
-  (setq mykeywords-regexp nil)
-  (setq mytypes-regexp nil)
+  (setq sott-keywords-regexp nil)
+  (setq sott-types-regexp nil)
 )
 
 (provide 'sott-mode)
