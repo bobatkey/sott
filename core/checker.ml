@@ -322,102 +322,12 @@ let equal_terms tm1 tm2 ty =
 (* FIXME: contexts ought to distinguish between 'global' (i.e bindings
    outwith the current term), and 'local'. *)
 
-module Context : sig
-  type t
-
-  type ty = value
-
-  type tm = value
-
-  val empty : t
-
-  val extend : string -> value -> t -> string * t
-
-  val lookup_local : string -> t -> (value, [>`VarNotFound of string]) result
-
-  val lookup_global : string -> t -> (value, [>`VarNotFound of string]) result
-
-  val lookup_exn : string -> t -> value * value option
-
-  val extend_with_defn : string -> ty:value -> tm:value -> t -> t
-
-  val local_bindings : t -> (string * value) list
-
-  val mk_free : string -> value -> value
-end = struct
-  module VarMap = Map.Make(String)
-
-  type entry =
-    { entry_type : value
-    ; entry_defn : value option
-    }
-
-  type t =
-    { global_entries    : entry VarMap.t
-    ; local_entries     : entry VarMap.t
-    ; local_entry_order : string list
-    }
-
-  type ty = value
-
-  type tm = value
-
-  let empty =
-    { global_entries = VarMap.empty
-    ; local_entries  = VarMap.empty
-    ; local_entry_order = []
-    }
-
-  let taken_of_ctxt ctxt nm =
-    VarMap.mem nm ctxt.global_entries
-    || VarMap.mem nm ctxt.local_entries
-
-  (* FIXME: what if we extend with a name that is already free in the
-     term? Need to distinguish free local and free global. *)
-  let extend nm entry_type ctxt =
-    let nm = Name_supply.freshen_for (taken_of_ctxt ctxt) nm in
-    let entry = { entry_type; entry_defn = None } in
-    nm,
-    { ctxt with
-        local_entries     = VarMap.add nm entry ctxt.local_entries
-      ; local_entry_order = nm :: ctxt.local_entry_order
-    }
-
-  let lookup_local nm ctxt =
-    match VarMap.find nm ctxt.local_entries with
-      | exception Not_found ->
-         Error (`VarNotFound nm)
-      | {entry_type} ->
-         Ok entry_type
-
-  let lookup_global nm ctxt =
-    match VarMap.find nm ctxt.global_entries with
-      | exception Not_found ->
-         Error (`VarNotFound nm)
-      | {entry_type} ->
-         Ok entry_type
-
-  let lookup_exn nm ctxt =
-    match VarMap.find nm ctxt.local_entries with
-      | {entry_type;entry_defn} -> (entry_type, entry_defn)
-      | exception Not_found ->
-         let {entry_type; entry_defn} = VarMap.find nm ctxt.global_entries in
-         (entry_type, entry_defn)
-
-  let extend_with_defn nm ~ty ~tm ctxt =
-    let entry = { entry_type = ty; entry_defn = Some tm } in
-    { ctxt with global_entries = VarMap.add nm entry ctxt.global_entries }
-
-  let local_bindings ctxt =
-    List.fold_left
-      (fun bindings nm ->
-         let {entry_type} = VarMap.find nm ctxt.local_entries in
-         (nm, entry_type) :: bindings)
-      []
-      ctxt.local_entry_order
-
-  let mk_free = free
-end
+module Context =
+  Context.Make (struct
+    type ty = value
+    type tm = value
+    let mk_free = free
+  end)
 
 (******************************************************************************)
 (* Evaluation: injection into the semantic 'value' domain. *)
