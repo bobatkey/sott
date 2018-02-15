@@ -326,7 +326,6 @@ module Context =
   Context.Make (struct
     type ty = value
     type tm = value
-    let mk_free = free
   end)
 
 (******************************************************************************)
@@ -503,7 +502,12 @@ type error_message =
       ; unmatchable : tag_set
       }
 
-module ScopeClose = Scoping.Close (Context)
+module ScopeClose =
+  Scoping.Close
+    (struct
+      include Context
+      let mk_free = free
+    end)
 
 let reword_error rewriter = function
   | Ok a      -> Ok a

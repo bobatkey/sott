@@ -10,7 +10,7 @@ module type S = sig
 
   val extend : string -> ty -> t -> string * t
 
-  val extend_with_defn : string -> ty:ty -> tm:tm -> t -> t
+  val extend_global : string -> ty:ty -> tm:tm -> t -> t
 
   val lookup_local : string -> t -> (ty, [>`VarNotFound of string]) result
 
@@ -20,8 +20,6 @@ module type S = sig
 
   val local_bindings : t -> (string * ty) list
 
-  val mk_free : string -> ty -> tm
-
 end
 
 module type TY_TM = sig
@@ -29,8 +27,6 @@ module type TY_TM = sig
   type ty
 
   type tm
-
-  val mk_free : string -> ty -> tm
 
 end
 

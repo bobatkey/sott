@@ -8,7 +8,7 @@ module Context : sig
 
   val empty : t
 
-  val extend_with_defn : string -> ty:value -> tm:value -> t -> t
+  val extend_global : string -> ty:value -> tm:value -> t -> t
 end
 
 module Evaluation : sig

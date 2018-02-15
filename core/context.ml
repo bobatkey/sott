@@ -10,7 +10,7 @@ module type S = sig
 
   val extend : string -> ty -> t -> string * t
 
-  val extend_with_defn : string -> ty:ty -> tm:tm -> t -> t
+  val extend_global : string -> ty:ty -> tm:tm -> t -> t
 
   val lookup_local : string -> t -> (ty, [>`VarNotFound of string]) result
 
@@ -19,8 +19,6 @@ module type S = sig
   val lookup_exn : string -> t -> ty * tm option
 
   val local_bindings : t -> (string * ty) list
-
-  val mk_free : string -> ty -> tm
 end
 
 module type TY_TM = sig
@@ -28,8 +26,6 @@ module type TY_TM = sig
   type ty
 
   type tm
-
-  val mk_free : string -> ty -> tm
 
 end
 
@@ -95,7 +91,7 @@ module Make (T : TY_TM) = struct
          let {entry_type; entry_defn} = VarMap.find nm ctxt.global_entries in
          (entry_type, entry_defn)
 
-  let extend_with_defn nm ~ty ~tm ctxt =
+  let extend_global nm ~ty ~tm ctxt =
     let entry = { entry_type = ty; entry_defn = Some tm } in
     { ctxt with global_entries = VarMap.add nm entry ctxt.global_entries }
 
@@ -106,7 +102,5 @@ module Make (T : TY_TM) = struct
          (nm, entry_type) :: bindings)
       []
       ctxt.local_entry_order
-
-  let mk_free = T.mk_free
 
 end

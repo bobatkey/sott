@@ -18,7 +18,7 @@ let rec process_decls ctxt = function
                Error ()
             | Ok () ->
                let tm = Checker.Evaluation.eval0 ctxt tm in
-               let ctxt = Checker.Context.extend_with_defn id ~ty ~tm ctxt in
+               let ctxt = Checker.Context.extend_global id ~ty ~tm ctxt in
                process_decls ctxt decls)
 
 let pprint_decl (`Def (id, ty, tm)) =
