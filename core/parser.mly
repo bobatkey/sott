@@ -115,6 +115,9 @@ app_term:
   | SUCC; t=base_term
     { { term_data = Succ t
       ; term_loc  = Location.mk $startpos $endpos } }
+  | SET; l=NATURAL
+    { { term_data = Set l
+      ; term_loc  = Location.mk $startpos $endpos } }
   | t=base_term
     { t }
 
@@ -140,7 +143,7 @@ base_term:
     { { term_data = SameClass t
       ; term_loc  = Location.mk $startpos $endpos } }
   | SET
-    { { term_data = Set
+    { { term_data = Set 0
       ; term_loc  = Location.mk $startpos $endpos } }
   | NAT
     { { term_data = Nat

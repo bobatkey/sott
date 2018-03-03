@@ -16,6 +16,8 @@ type 'a tag_map = 'a TagMap.t
 
 type 'a binder = B of string * 'a
 
+type level = int
+
 type term =
   { term_loc  : Location.t
   ; term_data : term_data
@@ -24,7 +26,7 @@ type term =
 and term_data =
   | Neutral of head * elims * term Lazy.t option
 
-  | Set
+  | Set of level
 
   | Pi of term * term binder
   | Lam of term binder
@@ -122,8 +124,8 @@ module AlphaEquality = struct
        equal_term t1 t2
     | Lam t1, Lam t2 ->
        binder equal_term t1 t2
-    | Set, Set ->
-       true
+    | Set i, Set j ->
+       i = j
     | Pi (s1, t1), Pi (s2, t2)
     | Sigma (s1, t1), Sigma (s2, t2) ->
        equal_term s1 s2 && binder equal_term t1 t2
@@ -295,7 +297,7 @@ end = struct
                                 ; tm2 = traverse_term j tm2
                                 ; ty2 = traverse_term j ty2
                                 } }
-        | Nat | Zero | Refl | Set | TagType _ | Tag _ ->
+        | Nat | Zero | Refl | Set _ | TagType _ | Tag _ ->
            tm
         | Succ t ->
            { tm with term_data = Succ (traverse_term j t) }

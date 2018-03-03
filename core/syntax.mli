@@ -21,6 +21,8 @@ end
 type 'a binder =
   | B  of string * 'a
 
+type level = int
+
 type term =
   { term_loc  : Location.t
   ; term_data : term_data
@@ -29,7 +31,7 @@ type term =
 and term_data =
   | Neutral of head * elims * term Lazy.t option
 
-  | Set
+  | Set of level
 
   | Pi of term * term binder
   | Lam of term binder

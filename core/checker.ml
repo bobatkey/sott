@@ -9,7 +9,7 @@ module Value = struct
   type value =
     | V_Neutral of v_head * v_elims
     | V_Lam     of value v_binder
-    | V_Set
+    | V_Set     of level
     | V_Nat
     | V_Zero
     | V_Succ    of value
@@ -123,7 +123,7 @@ module Value = struct
   let (@->) s t = V_Pi (s, VB ("x", fun _ -> t))
 
   let rec coerce v src tgt = match v, expand_value src, expand_value tgt with
-    | v, V_Set,  V_Set  -> v
+    | v, V_Set i,  V_Set j  when i = j -> v
     | n, V_Nat, V_Nat -> n
     | t, V_TagType tags1, V_TagType tags2 when TagSet.equal tags1 tags2 ->
        t
@@ -162,12 +162,13 @@ module Value = struct
          mk_term (Pi (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
       | V_Sigma (s, VB (x, t)) ->
          mk_term (Sigma (reify_type s i, B (x, reify_type (t (var s i)) (i+1))))
-      | V_Set ->
-         mk_term Set
+      | V_Set l ->
+         mk_term (Set l)
       | V_Nat ->
          mk_term Nat
       | V_QuotType (ty, r) ->
-         mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set) r i))
+         (* FIXME: how to choose the right level here? *)
+         mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set 0) r i))
       | V_TagType tags ->
          mk_term (TagType tags)
       | V_TyEq (s, t) ->
@@ -203,7 +204,7 @@ module Value = struct
          mk_term (Succ (reify V_Nat n i))
       | V_TagType _, V_Tag tag ->
          mk_term (Tag tag)
-      | V_Set, v ->
+      | V_Set _, v ->
          reify_type v i
       | V_QuotType (t, _), V_QuotIntro v ->
          mk_term (QuotIntro (reify t v i))
@@ -349,7 +350,7 @@ end = struct
     let rec eval tm env = match tm.term_data with
       | Neutral (h, es, _) -> eval_elims (eval_head h env) es env
       | Lam t           -> V_Lam (binder eval t env)
-      | Set             -> V_Set
+      | Set l           -> V_Set l
       | Pi (t1, t2)     -> V_Pi (eval t1 env, binder eval t2 env)
       | Sigma (s, t)    -> V_Sigma (eval s env, binder eval t env)
       | Pair (s, t)     -> V_Pair (eval s env, eval t env)
@@ -533,7 +534,7 @@ let (>>=) result f = match result with
   | Error _ as x -> x
 
 let rec is_type ctxt = function
-  | { term_data = Set; _ } ->
+  | { term_data = Set _; _ } ->
      Ok ()
 
   | { term_data = Nat; _ } ->
@@ -552,7 +553,7 @@ let rec is_type ctxt = function
   | { term_data = QuotType (ty, r); _ } ->
      is_type ctxt ty >>= fun () ->
      let ty = Evaluation.eval0 ctxt ty in
-     has_type ctxt (ty @-> ty @-> V_Set) r
+     has_type ctxt (ty @-> ty @-> V_Set 0) r
 
   | { term_data = TagType _; _ } ->
      Ok ()
@@ -572,11 +573,13 @@ let rec is_type ctxt = function
 
   | { term_data = Neutral (h, es, _); term_loc } ->
      (synthesise_elims_type ctxt h es >>= function
-       | V_Set ->
+       | V_Set _ ->
           Ok ()
        | ty ->
+          (* FIXME: say that we were expecting something of type 'Set
+             ?'. Have a special error message for this. *)
           let computed_ty = reify_type_small ty 0 in
-          let expected_ty = reify_type_small V_Set 0 in
+          let expected_ty = reify_type_small (V_Set 0) 0 in
           Error (Type_mismatch { loc = term_loc; ctxt; computed_ty; expected_ty }))
 
   | { term_loc; _ } ->
@@ -610,29 +613,30 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      let expected_ty = reify_type_small expected_ty 0 in
      Error (Term_is_not_a_pair { loc = term_loc; ctxt; expected_ty })
 
-  | V_Set, { term_data = Nat; _ } ->
+  | V_Set _, { term_data = Nat; _ } ->
      Ok ()
 
-  | V_Set, { term_data = Pi (s, t); _ } ->
-     has_type ctxt V_Set s >>= fun () ->
+  | V_Set l, { term_data = Pi (s, t); _ } ->
+     has_type ctxt (V_Set l) s >>= fun () ->
      let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
-     has_type ctxt V_Set t
+     has_type ctxt (V_Set l) t
 
-  | V_Set, { term_data = Sigma (s, t); _ } ->
-     has_type ctxt V_Set s >>= fun () ->
+  | V_Set l, { term_data = Sigma (s, t); _ } ->
+     has_type ctxt (V_Set l) s >>= fun () ->
      let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
-     has_type ctxt V_Set t
+     has_type ctxt (V_Set l) t
 
-  | V_Set, { term_data = QuotType (ty, r); _ } ->
-     has_type ctxt V_Set ty >>= fun () ->
+  | V_Set l, { term_data = QuotType (ty, r); _ } ->
+     has_type ctxt (V_Set l) ty >>= fun () ->
      let ty = Evaluation.eval0 ctxt ty in
-     has_type ctxt (ty @-> ty @-> V_Set) r
+     (* FIXME: check this level makes sense *)
+     has_type ctxt (ty @-> ty @-> V_Set l) r
 
-  | V_Set, { term_data = TyEq (s, t); _ } ->
+  | V_Set _l, { term_data = TyEq (s, t); _ } ->
      is_type ctxt s >>= fun () ->
      is_type ctxt t
 
-  | V_Set, { term_data = TmEq {tm1; ty1; tm2; ty2}; _ } ->
+  | V_Set _l, { term_data = TmEq {tm1; ty1; tm2; ty2}; _ } ->
      is_type ctxt ty1 >>= fun () ->
      is_type ctxt ty2 >>= fun () ->
      let ty1 = Evaluation.eval0 ctxt ty1 in
@@ -640,10 +644,10 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      has_type ctxt ty1 tm1 >>= fun () ->
      has_type ctxt ty2 tm2
 
-  | V_Set, { term_data = TagType _tags; _ } ->
+  | V_Set _l, { term_data = TagType _tags; _ } ->
      Ok ()
 
-  | V_Set, { term_loc; _ } ->
+  | V_Set _l, { term_loc; _ } ->
      Error (Term_is_not_a_small_type term_loc)
 
   | V_Nat, { term_data = Zero; _ } ->
@@ -767,7 +771,8 @@ and has_type ctxt ty tm = match expand_value ty, tm with
          V_QuotType (ty2, r2) ->
           error_when_false (equal_types ty1 ty2)
           >>= fun () ->
-          error_when_false (equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set))
+          (* FIXME: what is the right level to choose here? *)
+          error_when_false (equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set 0))
           >>= fun () ->
           has_type ctxt (apply (apply r1 a1) a2) prf
        | _ ->

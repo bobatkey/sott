@@ -121,6 +121,8 @@ and pp_quottype_term ctxt fmt tm =
 
 and pp_app_term ctxt fmt tm =
   match tm.term_data with
+    | Set i when i <> 0 ->
+       Format.fprintf fmt "Set %d" i
     | Succ tm ->
        let rec count_succs n tm =
          match tm.term_data with
@@ -146,7 +148,7 @@ and pp_app_term ctxt fmt tm =
 
 and pp_base_term ctxt fmt tm =
   match tm.term_data with
-    | Set ->
+    | Set 0 ->
        Format.fprintf fmt "Set"
     | Nat ->
        Format.fprintf fmt "Nat"
