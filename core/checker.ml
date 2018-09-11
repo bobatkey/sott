@@ -464,7 +464,10 @@ type error_message =
       ; ctxt : Context.t
       ; ty   : Syntax.term
       }
-  | VarNotFound of Location.t * string
+  | VarNotFound of
+      { loc   : Location.t
+      ; varnm : string
+      }
   | BadApplication of
       { loc     : Location.t
       ; arg_loc : Location.t
@@ -775,14 +778,14 @@ and synthesise_head_type ctxt = function
        | Ok ty ->
           Ok ty
        | Error (`VarNotFound nm) ->
-          Error (VarNotFound (head_loc, nm)))
+          Error (VarNotFound { loc = head_loc; varnm = nm }))
 
   | { head_data = Free_global nm; head_loc } ->
      (match Context.lookup_global nm ctxt with
        | Ok ty ->
           Ok ty
        | Error (`VarNotFound nm) ->
-          Error (VarNotFound (head_loc, nm)))
+          Error (VarNotFound { loc = head_loc; varnm = nm }))
 
   | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } ->
      is_type ctxt src_type >>= fun () ->

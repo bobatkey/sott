@@ -130,8 +130,8 @@ let pp fmt = function
        "bad tag elimination at %a: the tags being matched do not match the possible tags of the scruntinee (FIXME)."
        Location.pp_without_filename loc
 
-  | Checker.VarNotFound (loc, nm)  ->
+  | Checker.VarNotFound { loc; varnm }  ->
      Format.fprintf fmt
        "Variable '%s' not in scope at %a"
-       nm
+       varnm
        Location.pp_without_filename loc
