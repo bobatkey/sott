@@ -51,6 +51,7 @@ This is an implementation of [Observational Type Theory](http://strictlypositive
  11. Quotient types:
 
       - Formation: `A / R`, where `A` is a type and `R : A -> A -> Set`
+
       - Introduction: `[a] : A / R`, where `a : A`
 
       - Elimination: `x for z. T { [z] -> e1; z1 z2 zr -> e2 }`. The expression `e1` computes the answer, and `e2` is a proof that `e1` doesn't depend on the equivalence class.
