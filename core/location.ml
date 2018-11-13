@@ -20,13 +20,11 @@ let mk loc_start loc_end =
 let mk_span loc1 loc2 = match loc1, loc2 with
   | Generated, _ | _, Generated ->
      Generated
-  | FromSource { filename; start_line; start_column },
-    FromSource { end_line; end_column } ->
+  | FromSource { filename; start_line; start_column; _ },
+    FromSource { end_line; end_column; _ } ->
      FromSource { filename; start_line; start_column; end_line; end_column }
 
 let generated = Generated
-
-open Lexing
 
 let pp fmt = function
   | Generated ->

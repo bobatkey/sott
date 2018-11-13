@@ -73,14 +73,14 @@ module Make (T : TY_TM) = struct
     match VarMap.find nm ctxt.local_entries with
       | exception Not_found ->
          Error (`VarNotFound nm)
-      | {entry_type} ->
+      | {entry_type; _} ->
          Ok entry_type
 
   let lookup_global nm ctxt =
     match VarMap.find nm ctxt.global_entries with
       | exception Not_found ->
          Error (`VarNotFound nm)
-      | {entry_type} ->
+      | {entry_type; _} ->
          Ok entry_type
 
   let lookup_exn nm ctxt =
@@ -98,7 +98,7 @@ module Make (T : TY_TM) = struct
   let local_bindings ctxt =
     List.fold_left
       (fun bindings nm ->
-         let {entry_type} = VarMap.find nm ctxt.local_entries in
+         let {entry_type; _} = VarMap.find nm ctxt.local_entries in
          (nm, entry_type) :: bindings)
       []
       ctxt.local_entry_order

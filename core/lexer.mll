@@ -1,5 +1,4 @@
 {
-open Lexing
 open Parser
 }
 

@@ -1,0 +1,9 @@
+(library
+ (name      sott_core)
+ (libraries html5))
+
+(menhir
+ (modules parser))
+
+(ocamllex
+ lexer)

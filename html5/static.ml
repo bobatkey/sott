@@ -175,7 +175,7 @@ let concat_list nodes = List nodes
 let concat_map f l =
   List.fold_left (fun d x -> d ^^ f x) empty l
 
-let map f t = t
+let map _f t = t
 
 let attributes list =
   List.fold_left
@@ -387,8 +387,6 @@ module A = struct
   (* 'a' element attributes (4.5.1) *)
   let href value =
     Attr ("href", value)
-  let target value =
-    Attr ("target", value)
   let download value =
     Attr ("download", value)
   let rel value =
@@ -427,8 +425,6 @@ module A = struct
     Attr ("for", value)
 
   (* For 'input' elements *)
-  let accept value =
-    Attr ("accept", value)
   let alt value =
     Attr ("alt", value)
   let enabled value =

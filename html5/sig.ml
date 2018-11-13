@@ -236,21 +236,10 @@ module type S = sig
     
     val manifest : string (* uri *) -> _ attribute
 
-    (* 'base' attributes *)
-    val href : string (* uri *) -> _ attribute
-    val target : string (* uri *) -> _ attribute
-
     (* 'meta' attributes *)
     val http_equiv : string -> _ attribute
     val content : string -> _ attribute
     val charset : string -> _ attribute
-
-    (* 'link' attributes *)
-    (* href *)
-(*    val crossorigin : [`anonymous | `use_credentials] -> _ attribute*)
-    val rel : [`alternate | `author | `help | `icon | `license | `next | `prefetch | `prev | `search | `stylesheet] list -> _ attribute
-
-    (* FIXME *)
 
     (* 'style' attributes *)
     (* FIXME *)
@@ -266,7 +255,6 @@ module type S = sig
 
     (* 'a' attributes *)
     val href : string -> _ attribute
-    val target : string -> _ attribute
     val download : string -> _ attribute
     val rel : string -> _ attribute
     val hreflang : string -> _ attribute

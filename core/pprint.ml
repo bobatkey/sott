@@ -180,7 +180,7 @@ and pp_base_term ctxt fmt tm =
          (pp_iter TagSet.iter ~sep:",@ " pp_tag) tags
     | Tag tag ->
        pp_tag fmt tag
-    | Neutral (h, {elims_data=Nil}, _) ->
+    | Neutral (h, {elims_data=Nil; _}, _) ->
        pp_head ctxt fmt h
 
     | Pair (t1, t2) ->

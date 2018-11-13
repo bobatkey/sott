@@ -110,8 +110,7 @@ quottype_term:
 
 app_term:
   | h=head; ts=elim+
-    { let h, es = h, Nil in
-      { term_data = Neutral (h, List.fold_left build_elim nil ts, None)
+    { { term_data = Neutral (h, List.fold_left build_elim nil ts, None)
       ; term_loc  = Location.mk $startpos $endpos } }
   | SUCC; t=base_term
     { { term_data = Succ t

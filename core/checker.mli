@@ -16,14 +16,22 @@ module Evaluation : sig
 end
 
 type error_message =
-  | Term_is_not_a_type of Location.t
   | Type_mismatch of
       { loc         : Location.t
       ; ctxt        : Context.t
       ; computed_ty : Syntax.term
       ; expected_ty : Syntax.term }
-  | Term_is_not_a_function of Location.t
-  | Term_is_not_a_pair of Location.t
+  | Term_is_not_a_type of Location.t
+  | Term_is_not_a_function of
+      { loc         : Location.t
+      ; ctxt        : Context.t
+      ; expected_ty : Syntax.term
+      }
+  | Term_is_not_a_pair of
+      { loc         : Location.t
+      ; ctxt        : Context.t
+      ; expected_ty : Syntax.term
+      }
   | Term_is_not_a_small_type of Location.t
   | Term_is_not_a_natural of Location.t
   | Term_is_not_an_equiv_class of Location.t
@@ -63,7 +71,10 @@ type error_message =
       ; ctxt : Context.t
       ; ty   : Syntax.term
       }
-  | VarNotFound of Location.t * string
+  | VarNotFound of
+      { loc   : Location.t
+      ; varnm : string
+      }
   | BadApplication of
       { loc     : Location.t
       ; arg_loc : Location.t

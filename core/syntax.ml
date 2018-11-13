@@ -264,8 +264,8 @@ end = struct
 
   let traverse ~free ~bound j tm =
     let rec traverse_term j tm =
-      match tm with
-        | {term_data=Neutral (head, elims, reduced_opt)} ->
+      match tm.term_data with
+        | Neutral (head, elims, reduced_opt) ->
            { tm with
                term_data =
                  Neutral (traverse_head j head,
@@ -274,32 +274,32 @@ end = struct
                             | None -> None
                             | Some reduced ->
                                Some (lazy (traverse_term j (Lazy.force reduced)))) }
-        | {term_data = Lam t} ->
+        | Lam t ->
            { tm with term_data = Lam (binder traverse_term j t) }
-        | {term_data = Pi (s, t)} ->
+        | Pi (s, t) ->
            { tm with term_data = Pi (traverse_term j s, binder traverse_term j t) }
-        | {term_data = Sigma (s, t)} ->
+        | Sigma (s, t) ->
            { tm with term_data = Sigma (traverse_term j s, binder traverse_term j t) }
-        | {term_data = Pair (t1, t2)} ->
+        | Pair (t1, t2) ->
            { tm with term_data = Pair (traverse_term j t1, traverse_term j t2) }
-        | {term_data = QuotType (s, r)} ->
+        | QuotType (s, r) ->
            { tm with term_data = QuotType (traverse_term j s, traverse_term j r) }
-        | {term_data = QuotIntro t} ->
+        | QuotIntro t ->
            { tm with term_data = QuotIntro (traverse_term j t) }
-        | {term_data = TyEq (s, t)} ->
+        | TyEq (s, t) ->
            { tm with term_data = TyEq (traverse_term j s, traverse_term j t) }
-        | {term_data = TmEq {tm1;ty1;tm2;ty2}} ->
+        | TmEq {tm1;ty1;tm2;ty2} ->
            { tm with
                term_data = TmEq { tm1 = traverse_term j tm1
                                 ; ty1 = traverse_term j ty1
                                 ; tm2 = traverse_term j tm2
                                 ; ty2 = traverse_term j ty2
                                 } }
-        | {term_data = Nat | Zero | Refl | Set | TagType _ | Tag _} ->
+        | Nat | Zero | Refl | Set | TagType _ | Tag _ ->
            tm
-        | {term_data = Succ t} ->
+        | Succ t ->
            { tm with term_data = Succ (traverse_term j t) }
-        | {term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }} ->
+        | Subst { ty_s; ty_t; tm_x; tm_y; tm_e } ->
            { tm with
                term_data = Subst { ty_s = traverse_term j ty_s
                                  ; ty_t = binder traverse_term j ty_t
@@ -307,24 +307,24 @@ end = struct
                                  ; tm_y = traverse_term j tm_y
                                  ; tm_e = traverse_term j tm_e
                                  } }
-        | {term_data = Funext prf} ->
+        | Funext prf ->
            { tm with term_data = Funext (binder (binder (binder traverse_term)) j prf) }
-        | {term_data = SameClass prf} ->
+        | SameClass prf ->
            { tm with term_data = SameClass (traverse_term j prf) }
-        | {term_data = Coh prf} ->
+        | Coh prf ->
            { tm with term_data = Coh (traverse_term j prf) }
-        | {term_data = Irrel} ->
+        | Irrel ->
            tm
 
     and traverse_head j h =
-      match h with
-        | { head_data = Bound i } ->
+      match h.head_data with
+        |  Bound i  ->
            { h with head_data = bound i j }
-        | { head_data = Free_global nm } ->
+        |  Free_global nm  ->
            { h with head_data = free nm j }
-        | { head_data = Free_local _ } ->
+        |  Free_local _  ->
            h
-        | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof } } ->
+        |  Coerce { coercee; src_type; tgt_type; eq_proof  } ->
            { h with
                head_data =
                  Coerce { coercee  = traverse_term j coercee
@@ -334,29 +334,29 @@ end = struct
                         } }
 
     and traverse_elims j es =
-      match es with
-        | { elims_data = Nil } ->
+      match es.elims_data with
+        | Nil  ->
            { es with elims_data = Nil }
-        | { elims_data = App (elims, tm) } ->
+        | App (elims, tm)  ->
            { es with
                elims_data = App (traverse_elims j elims, traverse_term j tm) }
-        | { elims_data = Project (elims, component) } ->
+        | Project (elims, component)  ->
            { es with
                elims_data = Project (traverse_elims j elims, component) }
-        | { elims_data = ElimNat (elims, ty, tm_z, tm_s) } ->
+        | ElimNat (elims, ty, tm_z, tm_s)  ->
            { es with
                elims_data = ElimNat (traverse_elims j elims,
                                      binder traverse_term j ty,
                                      traverse_term j tm_z,
                                      binder (binder traverse_term) j tm_s) }
-        | { elims_data = ElimQ (elims, ty, tm, tm_eq) } ->
+        | ElimQ (elims, ty, tm, tm_eq)  ->
            { es with
                elims_data = ElimQ (traverse_elims j elims,
                                    binder traverse_term j ty,
                                    binder traverse_term j tm,
                                    binder (binder (binder traverse_term)) j tm_eq)
            }
-        | { elims_data = ElimTag (elims, ty, clauses) } ->
+        | ElimTag (elims, ty, clauses)  ->
            { es with elims_data = ElimTag (traverse_elims j elims,
                                            binder traverse_term j ty,
                                            TagMap.map (traverse_term j) clauses) }
@@ -365,7 +365,7 @@ end = struct
 
   let close_term x =
     traverse
-      ~free:(fun nm j -> Free_global nm)
+      ~free:(fun nm _j -> Free_global nm)
       ~bound:(fun i j -> if i = j then Free_local x else Bound i)
 
   let bind_term = function
@@ -373,7 +373,7 @@ end = struct
     | Some x ->
        traverse
          ~free:(fun nm j -> if nm = x then Bound j else Free_global nm)
-         ~bound:(fun i j -> Bound i)
+         ~bound:(fun i _j -> Bound i)
 
   let ident_of_binder = function
     | None -> "x"
