@@ -28,18 +28,18 @@ let of_file filename =
     let token_desc = Lexer.token lb in
     let token_text = Lexing.lexeme lb in
     match token_desc with
-      | `Token EOF ->
-         doc
-      | _ ->
-         let klass =
-           match token_desc with
-             | `Token tok  -> class_of_token tok
-             | `Comment    -> "comment"
-             | `Whitespace -> "whitespace"
-             | `Newline    -> "whitespace"
-         in
-         let doc = doc ^^ span ~attrs:[A.class_ klass] (text token_text) in
-         build doc
+    | `Token EOF ->
+      doc
+    | _ ->
+      let klass =
+        match token_desc with
+        | `Token tok  -> class_of_token tok
+        | `Comment    -> "comment"
+        | `Whitespace -> "whitespace"
+        | `Newline    -> "whitespace"
+      in
+      let doc = doc ^^ span ~attrs:[A.class_ klass] (text token_text) in
+      build doc
   in
   html begin
     head begin

@@ -13,11 +13,11 @@ as refl
 
 define trans :
   (A : Set)
-  (a : A)(b : A)(c : A) ->
-  [a = b : A] ->
-  [b = c : A] ->
+  (a : A)
+  (b : A)(p1 : [a = b : A])
+  (c : A)(p2 : [b = c : A]) ->
   [a = c : A]
-as introduce A a b c p q,
+as introduce A a b p c q,
    coerce(p,[a = b : A],[a = c : A],
           subst(A,z.[a = z : A],b,c,q))
 
@@ -29,7 +29,9 @@ define chain3 :
   (d:A)(p3 : [c = d : A]) ->
   [a = d : A]
 as introduce A a b p1 c p2 d p3,
-   trans A a b d p1 (trans A b c d p2 p3)
+   trans A a
+     b p1
+     d (trans A b c p2 d p3)
 
 define chain4 :
   (A:Set)
@@ -40,7 +42,7 @@ define chain4 :
   (e:A)(p4 : [d = e : A]) ->
   [a = e : A]
 as introduce A a b p1 c p2 d p3 e p4,
-   trans A a b e p1 (chain3 A b c p2 d p3 e p4)
+   trans A a b p1 e (chain3 A b c p2 d p3 e p4)
 
 define chain5 :
   (A:Set)
@@ -52,10 +54,10 @@ define chain5 :
   (f:A)(p5 : [e = f : A]) ->
   [a = f : A]
 as introduce A a b p1 c p2 d p3 e p4 f p5,
-   trans A a b f p1
-     (trans A b c f p2
-       (trans A c d f p3
-         (trans A d e f p4 p5)))
+   trans A a b p1
+     f (trans A b c p2
+         f (trans A c d p3
+             f (trans A d e p4 f p5)))
 
 define symm :
   (A : Set)(x : A)(y : A) -> [x = y : A] -> [y = x : A]
@@ -98,8 +100,8 @@ as introduce n m,
        trans Nat
           (Succ (add n m))
           (Succ (add m n))
-          (add m (Succ n))
           (f_equal (\n -> Succ n) (add n m) (add m n) p)
+          (add m (Succ n))
           (add_Succ m n)
    }
 
@@ -258,10 +260,8 @@ as introduce z,
    use z for z. [ add_int z (negate z) : Int = zero : Int ] {
      [z] -> same-class(trans Nat
                           (add (add (z#fst) (z#snd)) Zero)
-                          (add (z#fst) (z#snd))
-                          (add (z#snd) (z#fst))
-                          (add_n_Zero (add (z#fst) (z#snd)))
-                          (add_comm (z#fst) (z#snd)));
+                          (add (z#fst) (z#snd))              (add_n_Zero (add (z#fst) (z#snd)))
+                          (add (z#snd) (z#fst))              (add_comm (z#fst) (z#snd)));
      z1 z2 zr ->
         coherence(subst(Int, x. [add_int x (negate x) : Int = zero : Int],
                         [z1], [z2], same-class(zr)))
@@ -278,8 +278,8 @@ as introduce z1 z2,
            same-class(trans Nat
                         (add (add (z1#fst) (z2#fst)) (add (z2#snd) (z1#snd)))
                         (add (add (z2#fst) (z1#fst)) (add (z2#snd) (z1#snd)))
-                        (add (add (z2#fst) (z1#fst)) (add (z1#snd) (z2#snd)))
                         (f_equal (\x -> add x (add (z2#snd) (z1#snd))) (add (z1#fst) (z2#fst)) (add (z2#fst) (z1#fst)) (add_comm (z1#fst) (z2#fst)))
+                        (add (add (z2#fst) (z1#fst)) (add (z1#snd) (z2#snd)))
                         (f_equal (\x -> add (add (z2#fst) (z1#fst)) x) (add (z2#snd) (z1#snd)) (add (z1#snd) (z2#snd)) (add_comm (z2#snd) (z1#snd))));
          z2 z2' z2r ->
            coherence(subst(Int, x. [add_int [z1] x = add_int x [z1] : Int],
@@ -304,11 +304,11 @@ as introduce z1 z2 z3,
                  (trans Nat
                     (add (add (z1#fst) (add (z2#fst) (z3#fst))) (add (add (z1#snd) (z2#snd)) (z3#snd)))
                     (add (add (add (z1#fst) (z2#fst)) (z3#fst)) (add (add (z1#snd) (z2#snd)) (z3#snd)))
-                    (add (add (add (z1#fst) (z2#fst)) (z3#fst)) (add (z1#snd) (add (z2#snd) (z3#snd))))
                     (f_equal (\x -> add x (add (add (z1#snd) (z2#snd)) (z3#snd)))
                              (add (z1#fst) (add (z2#fst) (z3#fst)))
                              (add (add (z1#fst) (z2#fst)) (z3#fst))
                              (add_assoc (z1#fst) (z2#fst) (z3#fst)))
+                    (add (add (add (z1#fst) (z2#fst)) (z3#fst)) (add (z1#snd) (add (z2#snd) (z3#snd))))
                     (f_equal (\x -> add (add (add (z1#fst) (z2#fst)) (z3#fst)) x)
                              (add (add (z1#snd) (z2#snd)) (z3#snd))
                              (add (z1#snd) (add (z2#snd) (z3#snd)))
