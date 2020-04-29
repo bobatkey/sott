@@ -1,0 +1,69 @@
+define cong :
+  (f : Nat -> Nat)(x:Nat)(y:Nat) ->
+  [x = y : Nat] ->
+  [f x = f y : Nat]
+as introduce f x y eq,
+   coerce(refl,[f x = f x : Nat],[f x = f y : Nat],
+          subst(Nat,z.[f x = f z : Nat],x,y,eq))
+
+(************************************************************************)
+define add : Nat -> Nat -> Nat
+as introduce m n,
+   use m for _. Nat {
+     Zero ->
+       use n;
+     Succ m add_m_n ->
+       use Succ add_m_n;
+   }
+
+define add_assoc :
+  (a : Nat)(b : Nat)(c : Nat) ->
+  [add a (add b c) : Nat = add (add a b) c : Nat]
+as introduce a b c,
+   use a for a. [add a (add b c) : Nat = add (add a b) c : Nat] {
+     Zero ->
+       refl;
+     Succ a p ->
+       cong (\n -> Succ n) (add a (add b c)) (add (add a b) c) p
+   }
+
+(************************************************************************)
+define Vector : Set -> Nat -> Set
+as introduce A n,
+   use n for _. Set {
+     Zero ->
+       use [0 = 0 : Nat]; (* FIXME: a proper unit type *)
+     Succ _ v ->
+       A * v;
+   }
+
+define nums : (n:Nat) -> Vector Nat n
+as introduce n,
+   use n for n. Vector Nat n {
+     Zero        -> refl;
+     Succ m tail -> (m, tail)
+   }
+
+define test : [nums 5 = (4, (3, (2, (1, (0, refl))))) : Vector Nat 5]
+as refl
+
+define Vector_append
+  : (A:Set)(m:Nat)(n:Nat) -> Vector A m -> Vector A n -> Vector A (add m n)
+as introduce A m n,
+   use m for m. Vector A m -> Vector A n -> Vector A (add m n) {
+     Zero ->
+       introduce _ v2,
+       use v2;
+     Succ _ append ->
+       introduce v1 v2,
+       (v1#fst, append (v1#snd) v2);
+   }
+
+(************************************************************************)
+define List : Set -> Set
+as introduce A, (n : Nat) * Vector A n
+
+define append : (A:Set) -> List A -> List A -> List A
+as introduce A xs ys,
+   (add (xs#fst) (ys#fst),
+    Vector_append A (xs#fst) (ys#fst) (xs#snd) (ys#snd))

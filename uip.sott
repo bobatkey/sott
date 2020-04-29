@@ -1,0 +1,4 @@
+define uip : (A:Set)(a:A)(b:A)(p:[a=b:A])(q:[a=b:A]) -> [p = q : [a=b : A]]
+as introduce A a b p q,
+   use refl
+
