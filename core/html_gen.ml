@@ -64,5 +64,4 @@ body pre { font-family: ubuntu mono }
     end
   end
   |>
-  Render.print ~doctype:true;
-  Ok ()
+  Render.print ~doctype:true

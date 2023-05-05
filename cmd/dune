@@ -1,3 +1,4 @@
 (executable
  (name      sott)
+ (public_name sott)
  (libraries sott_core cmdliner))

@@ -4,15 +4,14 @@ This is an implementation of [Observational Type Theory](http://strictlypositive
 
 ## How to build it
 
-1. Install [OCaml and opam](https://ocaml.org). You will need OCaml version 4.03.0 or newer, because I've used inline records in algebraic datatypes.
-
-2. `opam install jbuilder cmdliner menhir`
-
-3. `jbuilder build cmdline/sott.exe`
+1. Make sure you have [opam](https://opam.ocaml.org) installed.
+2. Install dependencies locally `opam switch create . --deps-only`
+3. Update shell environment: `eval $(opam env)`
+2. `dune build`
 
 ## How to typecheck a file
 
-`./_build/default/cmdline/sott.exe typecheck <file.sott>`
+`dune exec cmd/sott.exe typecheck <file.sott>`
 
 ## Examples
 

@@ -4,7 +4,7 @@
 
 type tag = string
 type tag_set
-type +'a tag_map
+type +!'a tag_map
 
 module TagSet : Set.S
   with type t = tag_set

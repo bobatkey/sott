@@ -1,21 +1,19 @@
 let rec process_decls ctxt = function
   | [] ->
-     Ok ()
+     ()
   | `Def (id, ty, tm)::decls ->
      (match Checker.is_type ctxt ty with
        | Error msg ->
           Format.eprintf "@[<v>ERR: Checking '%s''s type: %a@]\n%!"
             id
-            Pprint_error.pp msg;
-          Error ()
+            Pprint_error.pp msg
        | Ok () ->
           let ty = Checker.Evaluation.eval0 ctxt ty in
           match Checker.has_type ctxt ty tm with
             | Error msg ->
                Format.eprintf "@[<v>ERR: Checking '%s' body: %a@]\n%!"
                  id
-                 Pprint_error.pp msg;
-               Error ()
+                 Pprint_error.pp msg
             | Ok () ->
                let tm = Checker.Evaluation.eval0 ctxt tm in
                let ctxt = Checker.Context.extend_global id ~ty ~tm ctxt in
@@ -29,9 +27,9 @@ let pprint_decl (`Def (id, ty, tm)) =
 
 let rec pprint_decls = function
   | [] ->
-     Ok ()
+     ()
   | [decl] ->
-     pprint_decl decl; Ok ()
+     pprint_decl decl
   | decl::decls ->
      pprint_decl decl;
      Format.print_newline ();
@@ -56,8 +54,7 @@ let process_file filename =
     | Ok decls ->
        process_decls Checker.Context.empty decls
     | Error msg ->
-       Format.printf "ERR: %s\n" msg;
-       Error ()
+       Format.printf "ERR: %s\n" msg
 
 let pprint_file filename =
   match load_file filename with
@@ -65,5 +62,4 @@ let pprint_file filename =
        Format.set_margin 100;
        pprint_decls decls
     | Error msg ->
-       Format.printf "ERR: %s\n" msg;
-       Error ()
+       Format.printf "ERR: %s\n" msg

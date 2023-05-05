@@ -9,27 +9,36 @@ let filename_arg =
 
 let typecheck_cmd =
   let doc = "Typecheck a .sott file" in
-  Term.(const Sott_core.Declarations.process_file $ filename_arg),
-  Term.info "typecheck" ~doc ~exits:Term.default_exits
+  Cmd.v
+    Cmd.(info "typecheck" ~doc)
+    Term.(const Sott_core.Declarations.process_file $ filename_arg)
 
 let pprint_cmd =
   let doc = "Pretty print a .sott file" in
-  Term.(const Sott_core.Declarations.pprint_file $ filename_arg),
-  Term.info "pprint" ~doc ~exits:Term.default_exits
+  Cmd.v
+    Cmd.(info "pprint" ~doc)
+    Term.(const Sott_core.Declarations.pprint_file $ filename_arg)
 
 let html_cmd =
   let doc = "Render a .sott file to HTML5" in
-  Term.(const Sott_core.Html_gen.of_file $ filename_arg),
-  Term.info "html" ~doc ~exits:Term.default_exits
+  Cmd.v
+    Cmd.(info "html" ~doc)
+    Term.(const Sott_core.Html_gen.of_file $ filename_arg)
 
 let default_cmd =
-  let doc = "Simplified Observational Type Theory" in
-  let sdocs = Manpage.s_common_options in
-  let exits = Term.default_exits in
-  Term.(ret (const (`Help (`Pager, None)))),
-  Term.info "sott" ~version:"v0.0.1" ~doc ~sdocs ~exits
+  Term.(ret (const (`Help (`Pager, None))))
+
 
 let () =
-  Term.(exit (eval_choice default_cmd [ typecheck_cmd
-                                      ; pprint_cmd
-                                      ; html_cmd ]))
+  let doc = "Simplified Observational Type Theory" in
+  let sdocs = Manpage.s_common_options in
+  let cmd =
+    Cmd.group
+      ~default:default_cmd
+      (Cmd.info "sott" ~version:"v0.0.1" ~doc ~sdocs)
+      [ typecheck_cmd
+      ; pprint_cmd
+      ; html_cmd
+      ]
+  in
+  exit (Cmd.eval cmd)
