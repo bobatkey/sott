@@ -1,0 +1,43 @@
+define False : Set as {| |}
+define True  : Set as {| `tt |}
+define Unit  : Set as True
+
+define is_zero : (n : Nat) -> Set
+as introduce n, use n for _. Set { Zero -> True; Succ _ _ -> False }
+
+define zero_neq_succ : (n : Nat) -> [ 0 = Succ n : Nat ] -> False
+as introduce n zero_eq_succ,
+   coerce(`tt,is_zero 0,is_zero (Succ n),
+          subst(Nat,x.is_zero x,0,Succ n,zero_eq_succ))
+
+define SumBody : Set -> Set -> {| `inl, `inr |} -> Set
+as introduce A B tag,
+   use tag for _. Set { `inl -> A; `inr -> B }
+
+define Sum : Set -> Set -> Set
+as introduce A B,
+   (tag : {| `inl, `inr |}) * SumBody A B tag
+
+define inl : (A : Set)(B : Set) -> A -> Sum A B
+as introduce A B a, (`inl, a)
+
+define inr : (A : Set)(B : Set) -> B -> Sum A B
+as introduce A B b, (`inr, b)
+
+define case : (A : Set)(B : Set)(C : Sum A B -> Set) ->
+              ((a : A) -> C (inl A B a)) ->
+	      ((b : B) -> C (inr A B b)) ->
+	      (x : Sum A B) -> C x
+as introduce A B C on_inl on_inr x,
+   x #fst for tag. (val : SumBody A B tag) -> C (tag, val) {
+     `inl -> on_inl;
+     `inr -> on_inr;
+   } (x #snd)
+
+define swap : (A : Set)(B : Set) -> Sum A B -> Sum B A
+as introduce A B, case A B (introduce _, Sum B A) (inr B A) (inl B A)
+
+(*
+define Graph : Set 1
+as (V : Set) * (V -> V -> Set)
+*)

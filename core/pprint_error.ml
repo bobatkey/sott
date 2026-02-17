@@ -34,10 +34,11 @@ let pp fmt = function
        "expecting a small type at %a"
        Location.pp_without_filename loc
 
-  | Checker.Term_is_not_a_function {loc; _} ->
+  | Checker.Term_is_not_a_function {loc; expected_ty; _} ->
      Format.fprintf fmt
-       "expecting a function at %a"
+       "expecting a function at %a of type @[<h 2>%a@]"
        Location.pp_without_filename loc
+       Pprint.pp_term expected_ty
 
   | Checker.Term_is_not_a_pair {loc; _} ->
      Format.fprintf fmt

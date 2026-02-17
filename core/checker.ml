@@ -270,7 +270,7 @@ module Value = struct
          | (reified_es, V_Sigma (s, _)), `fst ->
            mk_elim (Project (reified_es, `fst)), s
          | (reified_es, V_Sigma (_, VB (_, t))), `snd ->
-           mk_elim (Project (reified_es, `snd)), t (V_Neutral (h, es))
+           mk_elim (Project (reified_es, `snd)), t (V_Neutral (h, E_Project (es, `fst)))
          | _ ->
            failwith "internal error: type error reifying a projection")
       | E_ElimNat (es, VB (x, elim_ty), v_z, v_s) ->
