@@ -660,6 +660,11 @@ and has_type ctxt ty tm = match expand_value ty, tm with
   | V_Set _l, { term_data = TagType _tags; _ } ->
      Ok ()
 
+  | V_Set l1, { term_data = Set l2; term_loc } ->
+     if l2 < l1 then Ok () else
+       Error (Term_is_not_a_small_type term_loc)
+         (* FIXME: report universe level problem *)
+
   | V_Set _l, { term_loc; _ } ->
      Error (Term_is_not_a_small_type term_loc)
 
