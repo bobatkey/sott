@@ -129,30 +129,38 @@ module Value = struct
     | v, V_Set i,  V_Set j  when i = j -> v
     | n, V_Nat, V_Nat -> n
     | t, V_TagType tags1, V_TagType tags2 when TagSet.equal tags1 tags2 ->
-      t
+       t
     | f, V_Pi (ty_s, VB (_, ty_t)), V_Pi (ty_s', VB (x, ty_t')) ->
-      let x = match f with V_Lam (VB (x, _)) -> x | _ -> x in
-      V_Lam
-        (VB (x, fun s' ->
-             let s = coerce s' ty_s' ty_s in
-             let t = apply f s in
-             coerce t (ty_t' s') (ty_t s)))  (* FIXME: is this the wrong way round? *)
+       let x = match f with V_Lam (VB (x, _)) -> x | _ -> x in
+       V_Lam
+         (VB (x, fun s' ->
+                 let s = coerce s' ty_s' ty_s in
+                 let t = apply f s in
+                 coerce t (ty_t' s') (ty_t s)))
     | p, V_Sigma (ty_s, VB (_, ty_t)), V_Sigma (ty_s', VB (_, ty_t')) ->
-      let s' = coerce (vfst p) ty_s ty_s' in
-      V_Pair (s', coerce (vsnd p) (ty_t (vfst p)) (ty_t' s'))
+       let s' = coerce (vfst p) ty_s ty_s' in
+       V_Pair (s', coerce (vsnd p) (ty_t (vfst p)) (ty_t' s'))
     | c, V_QuotType (ty1, _r1), V_QuotType (ty2, r2) ->
-      elimq
-        (VB ("x", fun _ -> V_QuotType (ty2, r2)))
-        (VB ("x", fun x -> V_QuotIntro (coerce x ty1 ty2)))
-        c
+       (* FIXME: what happens to the proof in this case?
+
+          QuotType (ty1, r1) = QuotType (ty2, r2)
+            := [ty1 = ty2] * (\x y. r1 x y <-> r2 x y)
+
+          which is enough to make this coercion valid and to support
+          symmetry. *)
+       elimq
+         (VB ("x", fun _ -> V_QuotType (ty2, r2)))
+         (VB ("x", fun x -> V_QuotIntro (coerce x ty1 ty2)))
+         c
     | _, V_TyEq _, V_TyEq _
-    | _, V_TmEq _, V_TmEq _
-    | _, V_Neutral _, _
-    | _, _, V_Neutral _ ->
-      V_Neutral (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
+      | _, V_TmEq _, V_TmEq _
+      | _, V_Neutral _, _
+      | _, _, V_Neutral _ ->
+       V_Neutral (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
     | _ ->
-      (* FIXME: ought to be a suspended falsity elimination *)
-      V_Neutral (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
+       (* FIXME: ought to be a suspended falsity elimination. The
+          "proof" of equality was actually a proof of false. *)
+       V_Neutral (H_Coe { coercee = v; src_type = src; tgt_type = tgt }, E_Nil)
 
   (**********************************************************************)
   (* FIXME: equality test rather than reify to term and check for
@@ -170,7 +178,9 @@ module Value = struct
       | V_Nat ->
         mk_term Nat
       | V_QuotType (ty, r) ->
-        (* FIXME: how to choose the right level here? *)
+         (* FIXME: how to choose the right level here?
+
+            Probably need to put the level in the V_QuotType constructor. *)
         mk_term (QuotType (reify_type ty i, reify (ty @-> ty @-> V_Set 0) r i))
       | V_TagType tags ->
         mk_term (TagType tags)
@@ -538,44 +548,44 @@ let (>>=) result f = match result with
 
 let rec is_type ctxt = function
   | { term_data = Set _; _ } ->
-    Ok ()
+     Ok ()
 
   | { term_data = Nat; _ } ->
-    Ok ()
+     Ok ()
 
   | { term_data = Pi (s, t); _ } ->
-    is_type ctxt s >>= fun () ->
-    let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
-    is_type ctxt t
+     is_type ctxt s >>= fun () ->
+     let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
+     is_type ctxt t
 
   | { term_data = Sigma (s, t); _ } ->
-    is_type ctxt s >>= fun () ->
-    let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
-    is_type ctxt t
+     is_type ctxt s >>= fun () ->
+     let _, t, ctxt = ScopeClose.close (Evaluation.eval0 ctxt s) t ctxt in
+     is_type ctxt t
 
   | { term_data = QuotType (ty, r); _ } ->
-    is_type ctxt ty >>= fun () ->
-    let ty = Evaluation.eval0 ctxt ty in
-    has_type ctxt (ty @-> ty @-> V_Set 0) r
+     is_type ctxt ty >>= fun () ->
+     let ty = Evaluation.eval0 ctxt ty in
+     has_type ctxt (ty @-> ty @-> V_Set 0) r
 
   | { term_data = TagType _; _ } ->
-    Ok ()
+     Ok ()
 
   | { term_data = TyEq (s, t); _ } ->
-    is_type ctxt s >>= fun () ->
-    is_type ctxt t
+     is_type ctxt s >>= fun () ->
+     is_type ctxt t
 
   | { term_data = TmEq {tm1; ty1; tm2; ty2}; _ } ->
-    is_type ctxt ty1 >>= fun () ->
-    is_type ctxt ty2 >>= fun () ->
-    let ty1 = Evaluation.eval0 ctxt ty1 in
-    let ty2 = Evaluation.eval0 ctxt ty2 in
-    has_type ctxt ty1 tm1 >>= fun () ->
-    has_type ctxt ty2 tm2 >>= fun () ->
-    Ok ()
+     is_type ctxt ty1 >>= fun () ->
+     is_type ctxt ty2 >>= fun () ->
+     let ty1 = Evaluation.eval0 ctxt ty1 in
+     let ty2 = Evaluation.eval0 ctxt ty2 in
+     has_type ctxt ty1 tm1 >>= fun () ->
+     has_type ctxt ty2 tm2 >>= fun () ->
+     Ok ()
 
   | { term_data = Neutral (h, es, _); term_loc } ->
-    (synthesise_elims_type ctxt h es >>= function
+     (synthesise_elims_type ctxt h es >>= function
       | V_Set _ ->
          Ok ()
       | ty ->
@@ -586,35 +596,35 @@ let rec is_type ctxt = function
          Error (Type_mismatch { loc = term_loc; ctxt; computed_ty; expected_ty }))
 
   | { term_loc; _ } ->
-    Error (Term_is_not_a_type term_loc)
+     Error (Term_is_not_a_type term_loc)
 
 and has_type ctxt ty tm = match expand_value ty, tm with
   | ty, { term_data = Neutral (h, elims, _); term_loc } ->
-    synthesise_elims_type ctxt h elims >>= fun ty' ->
-    if equal_types ty ty' then
-      Ok ()
-    else
-      let expected_ty  = reify_type_small ty 0 in
-      let computed_ty = reify_type_small ty' 0 in
-      Error (Type_mismatch { loc = term_loc
-                           ; ctxt; computed_ty; expected_ty })
+     synthesise_elims_type ctxt h elims >>= fun ty' ->
+     if equal_types ty ty' then
+       Ok ()
+     else
+       let expected_ty = reify_type_small ty 0 in
+       let computed_ty = reify_type_small ty' 0 in
+       Error (Type_mismatch { loc = term_loc
+                            ; ctxt; computed_ty; expected_ty })
 
   | V_Pi (s, VB (_, t)), { term_data = Lam tm; _ } ->
-    let x, tm, ctxt = ScopeClose.close s tm ctxt in
-    has_type ctxt (t x) tm
+     let x, tm, ctxt = ScopeClose.close s tm ctxt in
+     has_type ctxt (t x) tm
 
   | V_Pi _ as expected_ty, { term_loc; _ } ->
-    let expected_ty = reify_type_small expected_ty 0 in
-    Error (Term_is_not_a_function { loc = term_loc; ctxt; expected_ty })
+     let expected_ty = reify_type_small expected_ty 0 in
+     Error (Term_is_not_a_function { loc = term_loc; ctxt; expected_ty })
 
   | V_Sigma (s, VB (_, t)), { term_data = Pair (tm_s, tm_t); _ } ->
-    has_type ctxt s tm_s >>= fun () ->
-    let tm_s = Evaluation.eval0 ctxt tm_s in
-    has_type ctxt (t tm_s) tm_t
+     has_type ctxt s tm_s >>= fun () ->
+     let tm_s = Evaluation.eval0 ctxt tm_s in
+     has_type ctxt (t tm_s) tm_t
 
   | V_Sigma _ as expected_ty, { term_loc; _ } ->
-    let expected_ty = reify_type_small expected_ty 0 in
-    Error (Term_is_not_a_pair { loc = term_loc; ctxt; expected_ty })
+     let expected_ty = reify_type_small expected_ty 0 in
+     Error (Term_is_not_a_pair { loc = term_loc; ctxt; expected_ty })
 
   | V_Set _, { term_data = Nat; _ } ->
      Ok ()
@@ -654,107 +664,115 @@ and has_type ctxt ty tm = match expand_value ty, tm with
      Error (Term_is_not_a_small_type term_loc)
 
   | V_Nat, { term_data = Zero; _ } ->
-    Ok ()
+     Ok ()
   | V_Nat, { term_data = Succ n; _ } ->
-    has_type ctxt V_Nat n
+     has_type ctxt V_Nat n
   | V_Nat, { term_loc; _ } ->
-    Error (Term_is_not_a_natural term_loc)
+     Error (Term_is_not_a_natural term_loc)
 
   | V_QuotType (ty, _), { term_data = QuotIntro tm; _ } ->
-    has_type ctxt ty tm
+     has_type ctxt ty tm
   | V_QuotType _, { term_loc; _ } ->
-    Error (Term_is_not_an_equiv_class term_loc)
+     Error (Term_is_not_an_equiv_class term_loc)
 
   | V_TagType tags, { term_data = Tag tag; term_loc } ->
-    if TagSet.mem tag tags then
-      Ok ()
-    else
-      Error (Term_is_not_a_valid_tag (term_loc, tags))
+     if TagSet.mem tag tags then
+       Ok ()
+     else
+       Error (Term_is_not_a_valid_tag (term_loc, tags))
 
   | V_TagType tags, { term_loc; _ } ->
-    Error (Term_is_not_a_valid_tag (term_loc, tags))
+     Error (Term_is_not_a_valid_tag (term_loc, tags))
 
   | V_TyEq (ty1, ty2), { term_data = Subst { ty_s; ty_t; tm_x; tm_y; tm_e }; _ } ->
-    is_type ctxt ty_s >>= fun () ->
-    let ty_s = Evaluation.eval0 ctxt ty_s in
-    (let _, ty_t, ctxt = ScopeClose.close ty_s ty_t ctxt in is_type ctxt ty_t)
-    >>= fun () ->
-    let ty_t = Evaluation.eval1 ctxt ty_t in
-    has_type ctxt ty_s tm_x >>= fun () ->
-    has_type ctxt ty_s tm_y >>= fun () ->
-    let tm_x = Evaluation.eval0 ctxt tm_x in
-    let tm_y = Evaluation.eval0 ctxt tm_y in
-    let ty   = V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s } in
-    has_type ctxt ty tm_e >>= fun () ->
-    if equal_types (ty_t tm_x) ty1 && equal_types (ty_t tm_y) ty2 then
-      Ok ()
-    else
-      let desd_ty1 = reify_type_small ty1 0 in
-      let desd_ty2 = reify_type_small ty2 0 in
-      let prvd_ty1 = reify_type_small (ty_t tm_x) 0 in
-      let prvd_ty2 = reify_type_small (ty_t tm_y) 0 in
-      Error (BadSubst { loc=tm.term_loc; ctxt
-                      ; desired_eq = (desd_ty1, desd_ty2)
-                      ; proved_eq  = (prvd_ty1, prvd_ty2)
-                      })
+     is_type ctxt ty_s >>= fun () ->
+     let ty_s = Evaluation.eval0 ctxt ty_s in
+     (let _, ty_t, ctxt = ScopeClose.close ty_s ty_t ctxt in is_type ctxt ty_t)
+     >>= fun () ->
+     let ty_t = Evaluation.eval1 ctxt ty_t in
+     has_type ctxt ty_s tm_x >>= fun () ->
+     has_type ctxt ty_s tm_y >>= fun () ->
+     let tm_x = Evaluation.eval0 ctxt tm_x in
+     let tm_y = Evaluation.eval0 ctxt tm_y in
+     let ty   = V_TmEq { s = tm_x; s_ty = ty_s; t = tm_y; t_ty = ty_s } in
+     has_type ctxt ty tm_e >>= fun () ->
+     if equal_types (ty_t tm_x) ty1 && equal_types (ty_t tm_y) ty2 then
+       Ok ()
+     else
+       let desd_ty1 = reify_type_small ty1 0 in
+       let desd_ty2 = reify_type_small ty2 0 in
+       let prvd_ty1 = reify_type_small (ty_t tm_x) 0 in
+       let prvd_ty2 = reify_type_small (ty_t tm_y) 0 in
+       Error (BadSubst { loc=tm.term_loc; ctxt
+                         ; desired_eq = (desd_ty1, desd_ty2)
+                         ; proved_eq  = (prvd_ty1, prvd_ty2)
+         })
 
   | V_TyEq (ty1, ty2),
     { term_data = Refl; term_loc } ->
-    if equal_types ty1 ty2 then
-      Ok ()
-    else
-      let ty1 = reify_type_small ty1 0 in
-      let ty2 = reify_type_small ty2 0 in
-      Error (Types_not_equal { loc = term_loc; ctxt; ty1; ty2 })
+     if equal_types ty1 ty2 then
+       Ok ()
+     else
+       let ty1 = reify_type_small ty1 0 in
+       let ty2 = reify_type_small ty2 0 in
+       Error (Types_not_equal { loc = term_loc; ctxt; ty1; ty2 })
 
   | V_TyEq _, { term_loc; _ } ->
-    Error (Term_is_not_a_type_equality term_loc)
+     Error (Term_is_not_a_type_equality term_loc)
 
   | V_TmEq { s; s_ty; t; t_ty }, { term_data = Refl; term_loc } ->
-    if equal_types s_ty t_ty then
-      (if equal_terms s t s_ty then
+     if equal_types s_ty t_ty then
+       (if equal_terms s t s_ty then
          Ok ()
        else
          let s = reify_small s_ty s 0 in
          let t = reify_small s_ty t 0 in
          let ty = reify_type_small s_ty 0 in
          Error (Terms_not_equal { loc = term_loc; ctxt; tm1 = s; tm2 = t; ty}))
-    else
-      let s_ty = reify_type_small s_ty 0 in
-      let t_ty = reify_type_small t_ty 0 in
-      Error (Types_not_equal { loc = term_loc; ctxt; ty1 = s_ty; ty2 = t_ty})
+     else
+       let s_ty = reify_type_small s_ty 0 in
+       let t_ty = reify_type_small t_ty 0 in
+       Error (Types_not_equal { loc = term_loc; ctxt; ty1 = s_ty; ty2 = t_ty})
 
+  (* This could be term_data = Lam t? And we check that
+       x0 : s1 |- t : (x1 : s2) -> [x0 : s1 = x1 : s2] -> [tm_f1 x0 : t1 x0 = tm_f2 x1 : t2 x1]
+
+     But this would mean that every proof of equality of functions
+     would have to start with a Lam.
+
+
+   *)
   | V_TmEq { s=tm_f1; s_ty; t=tm_f2; t_ty} as ty, { term_data = Funext proof; _ } ->
-    (match expand_value s_ty, expand_value t_ty with
+     (match expand_value s_ty, expand_value t_ty with
      | V_Pi (s1, VB (_, t1)), V_Pi (s2, VB (_, t2)) ->
-       let x1, x2, _, proof, ctxt =
-         ScopeClose.close3
-           s1
-           (fun _ -> s2)
-           (fun x1 x2 ->
+        let x1, x2, _, proof, ctxt =
+          ScopeClose.close3
+            s1
+            (fun _ -> s2)
+            (fun x1 x2 ->
               V_TmEq {s=x1; s_ty=s2; t=x2; t_ty=s2})
-           proof
-           ctxt
-       in
-       let reqd_ty =
-         V_TmEq { s    = apply tm_f1 x1
-                ; s_ty = t1 x1
-                ; t    = apply tm_f2 x2
-                ; t_ty = t2 x2
-                }
-       in
-       has_type ctxt reqd_ty proof
+            proof
+            ctxt
+        in
+        let reqd_ty =
+          V_TmEq { s    = apply tm_f1 x1
+                 ; s_ty = t1 x1
+                 ; t    = apply tm_f2 x2
+                 ; t_ty = t2 x2
+            }
+        in
+        has_type ctxt reqd_ty proof
      | _ ->
-       let ty = reify_type_small ty 0 in
-       Error (BadFunext { loc = tm.term_loc; ctxt; ty }))
+        let ty = reify_type_small ty 0 in
+        Error (BadFunext { loc = tm.term_loc; ctxt; ty }))
 
   | V_TmEq {s; s_ty; t; t_ty}, { term_data = Coh prf; term_loc } ->
-    has_type ctxt (V_TyEq (s_ty, t_ty)) prf >>= fun () ->
-    if equal_terms t (coerce s s_ty t_ty) t_ty then
-      Ok ()
-    else
-      let ty = reify_type_small ty 0 in
-      Error (BadCoherence { loc = term_loc; ctxt; ty })
+     has_type ctxt (V_TyEq (s_ty, t_ty)) prf >>= fun () ->
+     if equal_terms t (coerce s s_ty t_ty) t_ty then
+       Ok ()
+     else
+       let ty = reify_type_small ty 0 in
+       Error (BadCoherence { loc = term_loc; ctxt; ty })
 
   | V_TmEq { s; s_ty; t; t_ty }, { term_data = SameClass prf; term_loc } ->
      let error_when_false flag =
@@ -767,194 +785,194 @@ and has_type ctxt ty tm = match expand_value ty, tm with
             expand_value s_ty,
             expand_value t,
             expand_value t_ty
-      with
-       | V_QuotIntro a1,
-         V_QuotType (ty1, r1),
-         V_QuotIntro a2,
-         V_QuotType (ty2, r2) ->
-          error_when_false (equal_types ty1 ty2)
-          >>= fun () ->
-          (* FIXME: what is the right level to choose here? *)
-          error_when_false (equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set 0))
-          >>= fun () ->
-          has_type ctxt (apply (apply r1 a1) a2) prf
-       | _ ->
-          error_when_false false)
+     with
+     | V_QuotIntro a1,
+       V_QuotType (ty1, r1),
+       V_QuotIntro a2,
+       V_QuotType (ty2, r2) ->
+        error_when_false (equal_types ty1 ty2)
+        >>= fun () ->
+        (* FIXME: what is the right level to choose here? *)
+        error_when_false (equal_terms r1 r2 (ty1 @-> ty1 @-> V_Set 0))
+        >>= fun () ->
+        has_type ctxt (apply (apply r1 a1) a2) prf
+     | _ ->
+        error_when_false false)
 
   | V_TmEq _, { term_loc; _ } ->
-    Error (Term_is_not_a_term_equality term_loc)
+     Error (Term_is_not_a_term_equality term_loc)
 
   | ( V_Zero | V_Succ _
     | V_Lam _ | V_Pair _ | V_QuotIntro _
     | V_Tag _
     | V_Irrel | V_Neutral _), _ ->
-    failwith "internal error: has_type: attempting to check canonical term \
-              against non canonical type"
+     failwith "internal error: has_type: attempting to check canonical term \
+               against non canonical type"
 
 and synthesise_head_type ctxt = function
   | { head_data = Bound _; _ } ->
-    failwith "internal error: bound variable has got free"
+     failwith "internal error: bound variable has got free"
 
   | { head_data = Free_local nm; head_loc } ->
-    (match Context.lookup_local nm ctxt with
+     (match Context.lookup_local nm ctxt with
      | Ok ty ->
-       Ok ty
+        Ok ty
      | Error (`VarNotFound nm) ->
-       Error (VarNotFound { loc = head_loc; varnm = nm }))
+        Error (VarNotFound { loc = head_loc; varnm = nm }))
 
   | { head_data = Free_global nm; head_loc } ->
-    (match Context.lookup_global nm ctxt with
+     (match Context.lookup_global nm ctxt with
      | Ok ty ->
-       Ok ty
+        Ok ty
      | Error (`VarNotFound nm) ->
-       Error (VarNotFound { loc = head_loc; varnm = nm }))
+        Error (VarNotFound { loc = head_loc; varnm = nm }))
 
   | { head_data = Coerce { coercee; src_type; tgt_type; eq_proof }; _ } ->
-    is_type ctxt src_type >>= fun () ->
-    is_type ctxt tgt_type >>= fun () ->
-    let ty1 = Evaluation.eval0 ctxt src_type in
-    let ty2 = Evaluation.eval0 ctxt tgt_type in
-    has_type ctxt ty1 coercee >>= fun () ->
-    has_type ctxt (V_TyEq (ty1, ty2)) eq_proof >>= fun () ->
-    Ok ty2
+     is_type ctxt src_type >>= fun () ->
+     is_type ctxt tgt_type >>= fun () ->
+     let ty1 = Evaluation.eval0 ctxt src_type in
+     let ty2 = Evaluation.eval0 ctxt tgt_type in
+     has_type ctxt ty1 coercee >>= fun () ->
+     has_type ctxt (V_TyEq (ty1, ty2)) eq_proof >>= fun () ->
+     Ok ty2
 
 and synthesise_elims_type ctxt h = function
   | { elims_data = Nil; _ } ->
-    synthesise_head_type ctxt h
+     synthesise_head_type ctxt h
 
   | { elims_data = App (elims, tm); _ } ->
-    (synthesise_elims_type ctxt h elims >>= fun ty ->
-     match expand_value ty with
-     | V_Pi (s, VB (_, t)) ->
-       has_type ctxt s tm >>= fun () ->
-       Ok (t (Evaluation.eval0 ctxt tm))
-     | ty ->
-       let loc     = Syntax.location_of_neutral h elims in
-       let arg_loc = Syntax.location_of_term tm in
-       let ty      = reify_type ty 0 in
-       Error (BadApplication {loc;arg_loc;ctxt;ty}))
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+      | V_Pi (s, VB (_, t)) ->
+         has_type ctxt s tm >>= fun () ->
+         Ok (t (Evaluation.eval0 ctxt tm))
+      | ty ->
+         let loc     = Syntax.location_of_neutral h elims in
+         let arg_loc = Syntax.location_of_term tm in
+         let ty      = reify_type ty 0 in
+         Error (BadApplication {loc;arg_loc;ctxt;ty}))
 
   | { elims_data = ElimNat (elims, elim_ty, tm_z, tm_s); elims_loc } ->
-    (synthesise_elims_type ctxt h elims >>= fun ty ->
-     match expand_value ty with
-     | V_Nat ->
-       (let _, elim_ty, ctxt = ScopeClose.close V_Nat elim_ty ctxt in
-        is_type ctxt elim_ty)
-       >>= fun () ->
-       let ty = Evaluation.eval1 ctxt elim_ty in
-       has_type ctxt (ty V_Zero) tm_z >>= fun () ->
-       (let n, _, tm_s, ctxt =
-          ScopeClose.close2
-            V_Nat
-            (fun n -> ty n)
-            tm_s
-            ctxt
-        in
-        has_type ctxt (ty (V_Succ n)) tm_s) >>= fun () ->
-       Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
-     | _ ->
-       let ty     = reify_type_small ty 0 in
-       let hd_loc = location_of_neutral h elims in
-       let loc    = elims_loc in
-       Error (BadNatElim { loc; hd_loc; ctxt; ty }))
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+      | V_Nat ->
+         (let _, elim_ty, ctxt = ScopeClose.close V_Nat elim_ty ctxt in
+          is_type ctxt elim_ty)
+         >>= fun () ->
+         let ty = Evaluation.eval1 ctxt elim_ty in
+         has_type ctxt (ty V_Zero) tm_z >>= fun () ->
+         (let n, _, tm_s, ctxt =
+            ScopeClose.close2
+              V_Nat
+              (fun n -> ty n)
+              tm_s
+              ctxt
+          in
+          has_type ctxt (ty (V_Succ n)) tm_s) >>= fun () ->
+         Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
+      | _ ->
+         let ty     = reify_type_small ty 0 in
+         let hd_loc = location_of_neutral h elims in
+         let loc    = elims_loc in
+         Error (BadNatElim { loc; hd_loc; ctxt; ty }))
 
   | { elims_data = ElimQ (elims, elim_ty, tm, tm_eq); elims_loc } ->
-    (synthesise_elims_type ctxt h elims >>= fun ty ->
-     match expand_value ty with
-     | V_QuotType (ty_underlying, r) as ty ->
-       (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
-        is_type ctxt elim_ty)
-       >>= fun () ->
-       let ty = Evaluation.eval1 ctxt elim_ty in
-       (let n, tm, ctxt = ScopeClose.close ty_underlying tm ctxt in
-        has_type ctxt (ty (V_QuotIntro n)) tm)
-       >>= fun () ->
-       let tm = Evaluation.eval1 ctxt tm in
-       (let x1, x2, _xr, tm_eq, ctxt =
-          ScopeClose.close3
-            ty_underlying
-            (fun _ -> ty_underlying)
-            (fun x1 x2 -> apply (apply r x1) x2)
-            tm_eq
-            ctxt
-        in
-        has_type ctxt (V_TmEq { s = tm x1; s_ty = ty (V_QuotIntro x1)
-                              ; t = tm x2; t_ty = ty (V_QuotIntro x2) }) tm_eq)
-       >>= fun () ->
-       Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
-     | _ ->
-       let ty     = reify_type_small ty 0 in
-       let hd_loc = location_of_neutral h elims in
-       let loc    = elims_loc in
-       Error (BadQuotElim { loc; hd_loc; ctxt; ty }))
-
-  | { elims_data = Project (elims, `fst); elims_loc } ->
-    (synthesise_elims_type ctxt h elims >>= fun ty ->
-     match expand_value ty with
-     | V_Sigma (s, _t) ->
-       Ok s
-     | V_TyEq (V_Pi (s,_t), V_Pi (s',_t')) ->
-       Ok (V_TyEq (s',s))
-     | V_TyEq (V_Sigma (s,_t), V_Sigma (s',_t')) ->
-       Ok (V_TyEq (s,s'))
-     | ty ->
-       let ty     = reify_type_small ty 0 in
-       let hd_loc = location_of_neutral h elims in
-       let loc    = elims_loc in
-       Error (BadProject {loc;hd_loc;ctxt;ty}))
-
-  | { elims_data = Project (elims, `snd); elims_loc } ->
-    (synthesise_elims_type ctxt h elims >>= fun ty ->
-     match expand_value ty with
-     | V_Sigma (_s, VB (_, t)) ->
-       Ok (t (vfst (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None))))))
-     | V_TyEq (V_Pi (s, VB (x, t)), V_Pi (s', VB (x', t')))
-     | V_TyEq (V_Sigma (s, VB (x, t)), V_Sigma (s', VB (x', t'))) ->
-       Ok (V_Pi (s, VB (x, fun vs ->
-           V_Pi (s', VB (x', fun vs' ->
-               V_Pi (V_TmEq { s=vs; s_ty=s; t=vs'; t_ty=s' },
-                     VB (x^"_"^x', fun _ ->
-                         V_TyEq (t vs, t' vs'))))))))
-     | _ ->
-       let ty     = reify_type_small ty 0 in
-       let hd_loc = location_of_neutral h elims in
-       let loc    = elims_loc in
-       Error (BadProject {loc;hd_loc;ctxt;ty}))
-
-  | { elims_data = ElimTag (elims, elim_ty, clauses); elims_loc } ->
-    (synthesise_elims_type ctxt h elims >>= fun ty ->
-     match expand_value ty with
-     | V_TagType tags ->
-       let unmatched =
-         TagMap.fold
-           (fun k _ -> TagSet.remove k)
-           clauses
-           tags
-       and unmatchable =
-         TagMap.fold
-           (fun k _ s -> if TagSet.mem k tags then s else TagSet.add k s)
-           clauses
-           TagSet.empty
-       in
-       if TagSet.is_empty unmatched && TagSet.is_empty unmatchable then
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+      | V_QuotType (ty_underlying, r) as ty ->
          (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
           is_type ctxt elim_ty)
          >>= fun () ->
          let ty = Evaluation.eval1 ctxt elim_ty in
-         TagMap.fold
-           (fun tag tm result ->
-              result >>= fun () ->
-              has_type ctxt (ty (V_Tag tag)) tm)
-           clauses
-           (Ok ())
+         (let n, tm, ctxt = ScopeClose.close ty_underlying tm ctxt in
+          has_type ctxt (ty (V_QuotIntro n)) tm)
+         >>= fun () ->
+         let tm = Evaluation.eval1 ctxt tm in
+         (let x1, x2, _xr, tm_eq, ctxt =
+            ScopeClose.close3
+              ty_underlying
+              (fun _ -> ty_underlying)
+              (fun x1 x2 -> apply (apply r x1) x2)
+              tm_eq
+              ctxt
+          in
+          has_type ctxt (V_TmEq { s = tm x1; s_ty = ty (V_QuotIntro x1)
+                                  ; t = tm x2; t_ty = ty (V_QuotIntro x2) }) tm_eq)
          >>= fun () ->
          Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
-       else
+      | _ ->
+         let ty     = reify_type_small ty 0 in
          let hd_loc = location_of_neutral h elims in
          let loc    = elims_loc in
-         Error (IncorrectTags { loc; hd_loc; unmatched; unmatchable })
-     | _ ->
-       let ty     = reify_type_small ty 0 in
-       let hd_loc = location_of_neutral h elims in
-       let loc    = elims_loc in
-       Error (BadTagElim { loc; hd_loc; ctxt; ty }))
+         Error (BadQuotElim { loc; hd_loc; ctxt; ty }))
+
+  | { elims_data = Project (elims, `fst); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+      | V_Sigma (s, _t) ->
+         Ok s
+      | V_TyEq (V_Pi (s,_t), V_Pi (s',_t')) ->
+         Ok (V_TyEq (s',s))
+      | V_TyEq (V_Sigma (s,_t), V_Sigma (s',_t')) ->
+         Ok (V_TyEq (s,s'))
+      | ty ->
+         let ty     = reify_type_small ty 0 in
+         let hd_loc = location_of_neutral h elims in
+         let loc    = elims_loc in
+         Error (BadProject {loc;hd_loc;ctxt;ty}))
+
+  | { elims_data = Project (elims, `snd); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+      | V_Sigma (_s, VB (_, t)) ->
+         Ok (t (vfst (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None))))))
+      | V_TyEq (V_Pi (s, VB (x, t)), V_Pi (s', VB (x', t')))
+        | V_TyEq (V_Sigma (s, VB (x, t)), V_Sigma (s', VB (x', t'))) ->
+         Ok (V_Pi (s, VB (x, fun vs ->
+                             V_Pi (s', VB (x', fun vs' ->
+                                               V_Pi (V_TmEq { s=vs; s_ty=s; t=vs'; t_ty=s' },
+                                                     VB (x^"_"^x', fun _ ->
+                                                                   V_TyEq (t vs, t' vs'))))))))
+      | _ ->
+         let ty     = reify_type_small ty 0 in
+         let hd_loc = location_of_neutral h elims in
+         let loc    = elims_loc in
+         Error (BadProject {loc;hd_loc;ctxt;ty}))
+
+  | { elims_data = ElimTag (elims, elim_ty, clauses); elims_loc } ->
+     (synthesise_elims_type ctxt h elims >>= fun ty ->
+      match expand_value ty with
+      | V_TagType tags ->
+         let unmatched =
+           TagMap.fold
+             (fun k _ -> TagSet.remove k)
+             clauses
+             tags
+         and unmatchable =
+           TagMap.fold
+             (fun k _ s -> if TagSet.mem k tags then s else TagSet.add k s)
+             clauses
+             TagSet.empty
+         in
+         if TagSet.is_empty unmatched && TagSet.is_empty unmatchable then
+           (let _, elim_ty, ctxt = ScopeClose.close ty elim_ty ctxt in
+            is_type ctxt elim_ty)
+           >>= fun () ->
+           let ty = Evaluation.eval1 ctxt elim_ty in
+           TagMap.fold
+             (fun tag tm result ->
+               result >>= fun () ->
+               has_type ctxt (ty (V_Tag tag)) tm)
+             clauses
+             (Ok ())
+           >>= fun () ->
+           Ok (ty (Evaluation.eval0 ctxt (mk_term (Neutral (h, elims, None)))))
+         else
+           let hd_loc = location_of_neutral h elims in
+           let loc    = elims_loc in
+           Error (IncorrectTags { loc; hd_loc; unmatched; unmatchable })
+      | _ ->
+         let ty     = reify_type_small ty 0 in
+         let hd_loc = location_of_neutral h elims in
+         let loc    = elims_loc in
+         Error (BadTagElim { loc; hd_loc; ctxt; ty }))
